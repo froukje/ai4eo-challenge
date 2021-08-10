@@ -1,4 +1,36 @@
 #!/usr/bin/env python
+# Built-in modules
+import os
+import json
+import datetime as dt
+from typing import Tuple, List
+
+# Basics of Python data handling and visualization
+import numpy as np
+import pandas as pd
+import geopandas as gpd
+import matplotlib.pyplot as plt
+from matplotlib.colors import ListedColormap
+from tqdm.auto import tqdm
+
+# Module for GeoDB
+from xcube_geodb.core.geodb import GeoDBClient
+
+# Imports from eo-learn and sentinelhub-py
+from sentinelhub import CRS, BBox, SHConfig, DataCollection
+
+from eolearn.core import (FeatureType,
+                          EOPatch, 
+                          EOTask, 
+                          LinearWorkflow, 
+                          EOExecutor, 
+                          LoadTask,
+                          SaveTask)
+from eolearn.io import GeoDBVectorImportTask, SentinelHubInputTask
+from eolearn.geometry import VectorToRaster
+
+# Visualisation utilities from utils.py
+from utils import get_extent, md5_encode_files
 
 class SamplePatchletsTask(EOTask):
     '''

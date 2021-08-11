@@ -9,12 +9,6 @@ from typing import Tuple, List
 import numpy as np
 import pandas as pd
 import geopandas as gpd
-import matplotlib.pyplot as plt
-from matplotlib.colors import ListedColormap
-from tqdm.auto import tqdm
-
-# Module for GeoDB
-from xcube_geodb.core.geodb import GeoDBClient
 
 # Imports from eo-learn and sentinelhub-py
 from sentinelhub import CRS, BBox, SHConfig, DataCollection
@@ -26,11 +20,9 @@ from eolearn.core import (FeatureType,
                           EOExecutor, 
                           LoadTask,
                           SaveTask)
-from eolearn.io import GeoDBVectorImportTask, SentinelHubInputTask
-from eolearn.geometry import VectorToRaster
 
 # Visualisation utilities from utils.py
-from utils import get_extent, md5_encode_files
+from utils import get_extent
 
 class SamplePatchletsTask(EOTask):
     '''
@@ -123,3 +115,4 @@ class SamplePatchletsTask(EOTask):
             eops_out.append(sampled_s2)
 
         return eops_out
+

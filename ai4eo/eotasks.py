@@ -116,3 +116,45 @@ class SamplePatchletsTask(EOTask):
 
         return eops_out
 
+class ComputeReflectances(EOTask):
+    """ Apply normalisation factors to DNs (from starter notebook)"""
+    def __init__(self, feature):
+        self.feature = feature
+        
+    def execute(self, eopatch):
+        eopatch[self.feature] = eopatch.scalar['NORM_FACTORS'][..., None, None] \
+            * eopatch[self.feature].astype(np.float32)
+        return eopatch
+
+class SentinelHubValidData:
+    """
+    Combine 'CLM' mask with `IS_DATA` to define a `VALID_DATA_SH` mask
+    The SentinelHub's cloud mask is asumed to be found in eopatch.mask['CLM']
+    """
+    def __call__(self, eopatch):
+        return eopatch.mask['IS_DATA'].astype(bool) & np.logical_not(eopatch.mask['CLM'].astype(bool))
+
+    
+class AddValidCountTask(EOTask):
+    """
+    The task counts number of valid observations in time-series and stores the results in the timeless mask.
+    """
+    def __init__(self, count_what, feature_name):
+        self.what = count_what
+        self.name = feature_name
+
+    def execute(self, eopatch):
+        eopatch[(FeatureType.MASK_TIMELESS, self.name)] = np.count_nonzero(eopatch.mask[self.what], axis=0)
+        return eopatch
+    
+    
+class ValidDataFractionPredicate:
+    """ Predicate that defines if a frame from EOPatch's time-series is valid or not. Frame is valid if the
+    valid data fraction is above the specified threshold.
+    """
+    def __init__(self, threshold):
+        self.threshold = threshold
+
+    def __call__(self, array):
+        coverage = np.sum(array.astype(np.uint8)) / np.prod(array.shape)
+        return coverage > self.threshold

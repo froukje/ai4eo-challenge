@@ -131,13 +131,13 @@ if __name__=='__main__':
     parser.add_argument('--raw-data-dir', type=str, default='/work/shared_data/2021-ai4eo/eopatches/')
     parser.add_argument('--target-dir', type=str, default='/work/shared_data/2021-ai4eo/dev_data/default/')
     parser.add_argument('--n-processes', type=int, default=4, help='Processes for EOExecutor')
-    parser.add_argument('--n-valid-patches', type=int, default=10, help='Number of EOPatches selected for validation')
-    parser.add_argument('--s2-length', type=int, default=32, help='Cropped EOPatch samples side length')
+    #parser.add_argument('--n-valid-patches', type=int, default=10, help='Number of EOPatches selected for validation')
+    #parser.add_argument('--s2-length', type=int, default=32, help='Cropped EOPatch samples side length')
     parser.add_argument('--cloud-threshold', type=float, default=0.9, help='threshold for valid data cloud mask')
-    parser.add_argument('--n-time-frames', type=int, default=1, help='Number of time frames in EOPatches')
+    #parser.add_argument('--n-time-frames', type=int, default=1, help='Number of time frames in EOPatches')
     parser.add_argument('--overwrite', action='store_true', help='Overwrite the output files')
-    parser.add_argument('--s2-random', action='store_true', 
-                        help='Randomly select overlapping patches (else: systematically select non overlapping patches')
+    #parser.add_argument('--s2-random', action='store_true', 
+    #                    help='Randomly select overlapping patches (else: systematically select non overlapping patches')
 
     args = parser.parse_args()
 

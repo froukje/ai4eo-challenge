@@ -82,6 +82,11 @@ def main(args):
     #                                             num_samples=15*15, 
     #                                             random_mode=args.s2_random)
 
+    # add weight map
+    add_weight = eotasks.AddWeightMapTask( (FeatureType.MASK_TIMELESS, 'CULTIVATED'), 
+                                           (FeatureType.MASK_TIMELESS, 'NOT_DECLARED'), 
+                                           (FeatureType.DATA_TIMELESS, 'WEIGHTS'))
+
     save_eopatches = SaveTask(args.target_dir, overwrite_permission=args.overwrite)
 
     # construct the graph
@@ -94,6 +99,7 @@ def main(args):
                               add_valid_count,
                               filter_task,
                               #sample_task, 
+                              add_weight,
                               save_eopatches,
                               )
 

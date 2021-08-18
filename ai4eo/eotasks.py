@@ -10,6 +10,8 @@ import numpy as np
 import pandas as pd
 import geopandas as gpd
 
+from tqdm.auto import tqdm
+
 # Imports from eo-learn and sentinelhub-py
 from sentinelhub import CRS, BBox, SHConfig, DataCollection
 
@@ -23,6 +25,11 @@ from eolearn.core import (FeatureType,
 
 # Visualisation utilities from utils.py
 from utils import get_extent
+
+from scipy.stats import skewnorm
+
+from skimage import measure
+from skimage.morphology import binary_dilation, disk
 
 class SamplePatchletsTask(EOTask):
     '''
@@ -78,6 +85,14 @@ class SamplePatchletsTask(EOTask):
         for feat_name in target_features:
             sampled_eop.mask_timeless[feat_name] = \
             eop.mask_timeless[feat_name][self.SCALE_FACTOR*row:self.SCALE_FACTOR*row + self.SCALE_FACTOR*size, 
+                                         self.SCALE_FACTOR*col:self.SCALE_FACTOR*col + self.SCALE_FACTOR*size]
+        
+        # sample from weight maps, beware of `4x` scale factor
+        target_features = eop.get_feature(FeatureType.DATA_TIMELESS).keys()
+        
+        for feat_name in target_features:
+            sampled_eop.data_timeless[feat_name] = \
+            eop.data_timeless[feat_name][self.SCALE_FACTOR*row:self.SCALE_FACTOR*row + self.SCALE_FACTOR*size, 
                                          self.SCALE_FACTOR*col:self.SCALE_FACTOR*col + self.SCALE_FACTOR*size]
         
         return sampled_eop
@@ -158,3 +173,83 @@ class ValidDataFractionPredicate:
     def __call__(self, array):
         coverage = np.sum(array.astype(np.uint8)) / np.prod(array.shape)
         return coverage > self.threshold
+
+def weighting_function(pix_size: int, median_pix_size: int, highest_weight_pix_size: int = 35,
+                       skewness: int = 15) -> float:
+    """ Creates weight to be applied to a parcel depending on its number of pixels (after pixelation) """
+    if pix_size >= median_pix_size:
+        return 1
+    
+    xs = np.linspace(1, median_pix_size, median_pix_size)
+    y1 = skewnorm.pdf(xs, skewness, loc=highest_weight_pix_size-100/3.14, scale=100)
+    y1 = y1 / max(y1)
+    y1 = y1 + 1
+
+    return y1[int(pix_size)].astype(np.float)
+
+
+class AddWeightMapTask(EOTask):
+    """ Computes the weight map used to compute the validation metric """
+
+    def __init__(self, 
+                 cultivated_feature: Tuple[FeatureType, str], 
+                 not_declared_feature: Tuple[FeatureType, str], 
+                 weight_feature: Tuple[FeatureType, str], 
+                 radius: int = 2, seed: int = 4321):
+        self.cultivated_feature = cultivated_feature
+        self.not_declared_feature = not_declared_feature
+        self.weight_feature = weight_feature
+        self.radius = radius
+        self.seed = seed
+        
+    def execute(self, eopatch: EOPatch) -> EOPatch:
+        cultivated = eopatch[self.cultivated_feature].astype(np.uint8).squeeze()
+        not_declared = eopatch[self.not_declared_feature].squeeze()
+
+        np.random.seed(self.seed)
+
+        # compute connected components on binary mask
+        conn_comp = measure.label(cultivated, background=0)
+        # number of connected components
+        n_comp = np.max(conn_comp) + 1
+
+        # Placeholder for outputs
+        height, width = cultivated.shape
+        weights = np.zeros((height, width), dtype=np.float32)
+        contours = np.zeros((height, width), dtype=np.float32)
+        counts = np.zeros((height, width), dtype=np.uint8)
+
+        # Loop over connected components, ignoring background
+        for ncc in tqdm(np.arange(1, n_comp)):
+            parcel_mask = conn_comp == ncc
+            # number of pixels of each component, i.e. parcel
+            n_pixels = np.sum(parcel_mask)
+
+            # compute external boundary of parcel 
+            dilated_mask = binary_dilation(parcel_mask, selem=disk(radius=self.radius))
+            contour = np.logical_and(~parcel_mask, dilated_mask)
+
+            weight = weighting_function(n_pixels, median_pix_size=400)
+
+            weights[parcel_mask] = weight
+            contours += 2 * weight * contour
+            # In case countours overlap, the average weight is taken
+            counts += contour
+
+        # combine weights from all parcels into a single map. First add (averaged) contours,
+        # then weighted parcels, then background 
+        weight_map = np.zeros((height, width), dtype=np.float32)
+        weight_map[contours > 0] = contours[contours > 0] / counts[contours > 0]
+        weight_map[weights > 0] = weights[weights > 0]
+        weight_map[weight_map == 0] = 1
+
+        # add zero weights at border and undeclared parcels
+        weight_map[not_declared == True] = 0
+        weight_map[:1, :] = 0
+        weight_map[:, :1] = 0
+        weight_map[-2:, :] = 0
+        weight_map[:, -2:] = 0
+
+        eopatch[self.weight_feature] = weight_map[..., np.newaxis]
+        
+        return eopatch

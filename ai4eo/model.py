@@ -157,6 +157,7 @@ def main(args):
             pred_values = pred.detach().numpy()
 
         # TODO pred / target dimension
+        # TODO masking should be done in the network output layer
         pred = torch.reshape(pred, (len(inputs), -1)) > 0
         target = torch.reshape(target, (len(inputs), -1)) > 0
         weight = torch.reshape(weight, (len(inputs), -1))
@@ -189,10 +190,11 @@ def main(args):
     valid_loader = DataLoader(valid_dataset, batch_size=args.batch_size)
     # instantiate the model
     model = EOModel(args)
+    if torch.cuda.is_available():
+        model = model.cuda()
     device = model.get_device()
-    print(f'\nDevice {device}\n')
+    print(f'\nDevice {model.get_device()}')
     # optimizer
-    #loss_fn = nn.MSELoss(reduction='mean')
     optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
 
     # training
@@ -215,7 +217,7 @@ def main(args):
             if args.debug:
                 break
         train_loss = np.mean(np.array(train_losses))
-        print(f'Training took {(time.time() - start_time) / 60:.2f} seconds, train_loss: {train_loss:.4f}')
+        print(f'Training took {(time.time() - start_time) / 60:.2f} minutes, train_loss: {train_loss:.4f}')
         start_time = time.time()
         # validation
         model = model.eval()
@@ -226,7 +228,7 @@ def main(args):
             preds.append(pred)
         valid_loss = np.mean(np.array(valid_losses))
         pred = np.concatenate(pred, axis=0)
-        print(f'Validation took {(time.time() - start_time) / 60:.2f} seconds, valid_loss: {valid_loss:.4f}')
+        print(f'Validation took {(time.time() - start_time) / 60:.2f} minutes, valid_loss: {valid_loss:.4f}')
         # nni
         if args.nni:
             nni.report_intermediate_result(valid_loss)

@@ -21,82 +21,6 @@ import eotasks
 
 SCALE = 4
 
-#from pytorch_lightning.metrics import Metric
-#from pytorch_lightning.metrics.functional.classification import (
-#    stat_scores_multiple_classes
-#)
-#
-## TODO
-## https://github.com/scikit-learn/scikit-learn/blob/f3067cb6201101df6d4f12f25fe488f6b35006cc/sklearn/metrics/_classification.py
-#
-#
-#
-#class MCC(Metric):
-#    r"""
-#    Adapted from https://gist.github.com/abhik-99/7564fdac4ede90fc7b99ef91abd64041
-#
-#    Computes `Mathews Correlation Coefficient <https://en.wikipedia.org/wiki/Matthews_correlation_coefficient>`_:
-#    Forward accepts
-#    - ``preds`` (float or long tensor): ``(N, ...)`` or ``(N, C, ...)`` where C is the number of classes
-#    - ``target`` (long tensor): ``(N, ...)``
-#    If preds and target are the same shape and preds is a float tensor, we use the ``self.threshold`` argument.
-#    This is the case for binary and multi-label logits.
-#    If preds has an extra dimension as in the case of multi-class scores we perform an argmax on ``dim=1``.
-#    Args:
-#        labels: Classes in the dataset.
-#        pos_label: Treats it as a binary classification problem with given label as positive.
-#    """
-#    def __init__(
-#        self,
-#        labels,
-#        pos_label = None, 
-#        compute_on_step = True,
-#        dist_sync_on_step = False,
-#        process_group = None,
-#    ):
-#        super().__init__(
-#            compute_on_step=compute_on_step,
-#            dist_sync_on_step=dist_sync_on_step,
-#            process_group=process_group,
-#        )
-#
-#        self.labels = labels
-#        self.num_classes = len(labels)
-#        self.idx = None
-#
-#        if pos_label is not None:
-#          self.idx = labels.index(pos_label)
-#
-#        self.add_state("matthews_corr_coef", default=torch.tensor(0), dist_reduce_fx="mean")
-#        self.add_state("total", default=torch.tensor(0), dist_reduce_fx="sum")
-#
-#    def update(self, preds: torch.Tensor, target: torch.Tensor):
-#        """
-#        Update state with predictions and targets.
-#        Args:
-#            preds: Predictions from model
-#            target: Ground truth values
-#        """
-#        tps, fps, tns, fns, _ = stat_scores_multiple_classes(
-#            pred=preds, target=target, num_classes=self.num_classes)
-#        
-#        if self.idx is not None:
-#          tps, fps, tns, fns = tps[self.idx], fps[self.idx], tns[self.idx], fns[self.idx]
-#        
-#        numerator = (tps * tns) - (fps * fns)
-#        denominator = torch.sqrt(((tps + fps) * (tps + fns) * (tns + fps) * (tns + fns)))
-#        
-#        self.matthews_corr_coef = numerator / denominator
-#        #Replacing any NaN values with 0
-#        self.matthews_corr_coef[torch.isnan(self.matthews_corr_coef)] = 0 
-#        
-#        self.total += 1
-#
-#    def compute(self):
-#        """
-#        Computes Matthews Correlation Coefficient over state.
-#        """
-#        return self.matthews_corr_coef / self.total
 
 # Data set
 class EODataset(Dataset):
@@ -233,15 +157,20 @@ def main(args):
             pred_values = pred.detach().numpy()
 
         # TODO pred / target dimension
-        pred = torch.reshape(pred, (len(inputs), -1))
-        target = torch.reshape(target, (len(inputs), -1))
+        pred = torch.reshape(pred, (len(inputs), -1)) > 0
+        target = torch.reshape(target, (len(inputs), -1)) > 0
         weight = torch.reshape(weight, (len(inputs), -1))
-        print(pred.shape)
-        print(pred)
-        print(target)
-        losses = matthews_corrcoef(target.detach().numpy(), pred.detach().numpy(), sample_weight=weight.detach().numpy())
+        # to cpu for sklearn (inefficient)
+        target = target.cpu().flatten()
+        pred = pred.cpu().flatten()
+        weight = weight.cpu().flatten()
 
-        return losses, pred_values
+        # https://scikit-learn.org/stable/modules/generated/sklearn.metrics.matthews_corrcoef.html
+        # make it a loss function: +1 is perfect correlation
+        loss = 1 - matthews_corrcoef(target, pred, sample_weight=weight)
+        loss = torch.tensor(loss, dtype=torch.float32, requires_grad=True, device=device)
+
+        return loss, pred_values
 
     # start the program
     if args.fixed_random_seed:
@@ -283,18 +212,21 @@ def main(args):
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+            if args.debug:
+                break
         train_loss = np.mean(np.array(train_losses))
+        print(f'Training took {(time.time() - start_time) / 60:.2f} seconds, train_loss: {train_loss:.4f}')
+        start_time = time.time()
         # validation
         model = model.eval()
         valid_losses, preds = [], []
         for idx, (inputs, target, weight) in enumerate(valid_loader):
             loss, pred = predict(inputs, target, weight, model, eval_=True)
-            valid_losses.append(loss)
+            valid_losses.append(loss.detach().numpy())
             preds.append(pred)
         valid_loss = np.mean(np.array(valid_losses))
         pred = np.concatenate(pred, axis=0)
-        print(f'Epoch took {(time.time() - start_time) / 60:.2f} mins')
-        print(f'train loss: {train_loss}, valid_loss: {valid_loss}')
+        print(f'Validation took {(time.time() - start_time) / 60:.2f} seconds, valid_loss: {valid_loss:.4f}')
         # nni
         if args.nni:
             nni.report_intermediate_result(valid_loss)
@@ -333,6 +265,7 @@ if __name__=='__main__':
     parser.add_argument('--fixed-random-seed', action='store_true', default=True, help='fixed random seed numpy / torch') 
     parser.add_argument('--inference', action='store_true', default=False, help='run test set inference')
     parser.add_argument('--nni', action='store_true', default=False)
+    parser.add_argument('--debug', action='store_true', default=False, help='skip after first batch in training')
     # network and training hyperparameters
     parser.add_argument('--learning-rate', type=float, default=1e-3)
     parser.add_argument('--batch-size', type=int, default=64)

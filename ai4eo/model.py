@@ -33,6 +33,11 @@ class EODataset(Dataset):
         if flag=='test':
             print(f'not implemented: {flag}')
             return
+        # band specification
+        # https://sentinels.copernicus.eu/web/sentinel/user-guides/sentinel-2-msi/resolutions/spatial
+        band_names = ['B01','B02','B03','B04','B05','B06','B07','B08','B8A','B09','B11','B12'] # from starter notebook
+        band_wavelength = [443, 490, 560, 665, 705, 740, 783, 842, 865, 940, 1610, 2190] # nm
+        band_spatial_resolution = [60, 10, 10, 10, 20, 20, 20, 10, 20, 60, 20, 20] # m
 
         # read from args.processed_data_dir
         # division in train / valid or test
@@ -78,16 +83,29 @@ class EODataset(Dataset):
         tidx = 0
         print(f'selecting the very first time stamp')
 
-        # subsample bands and other channels TODO
-        print(f'selecting NDVI channel only')
+        # subsample bands and other channels
+        print('-- selecting bands --')
+        for band in args.bands:
+            print(f'  {band}')
+        print('-- selecting normalized indices --')
+        for index in args.indices:
+            print(f'  {index}')
 
         lowres = []
         target = []
         weight = []
 
         for patch in small_patches:
-            x = patch.data['NDVI'][tidx]
-            lowres.append(x.astype(np.float32))
+            x = []
+            for band in args.bands:
+                band_ix = band_names.index(band)
+                xx = patch.data['BANDS'][tidx][:, :, band_ix]
+                x.append(xx.astype(np.float32))
+            for index in args.indices:
+                xx = patch.data[index][tidx]
+                x.append(xx.astype(np.float32).squeeze())
+
+            lowres.append(np.array(x))
             y = patch.mask_timeless['CULTIVATED']
             target.append(y.astype(np.float32))
             w = patch.data_timeless['WEIGHTS']
@@ -109,16 +127,17 @@ class EODataset(Dataset):
 
 # Model definition
 class EOModel(nn.Module):
-    def __init__(self, args):
+    def __init__(self, args, input_channels):
         # stub: add proper architecture
         super().__init__()
         self.args = args
-        self.down_cv1 = nn.Conv2d(1, args.filters, kernel_size=3, padding=1)
+        self.input_channels = input_channels
+        self.down_cv1 = nn.Conv2d(input_channels, args.filters, kernel_size=3, padding=1)
         self.up_cv1   = nn.ConvTranspose2d(args.filters, 1, kernel_size=3, padding=1)
         self.up_cv2   = nn.ConvTranspose2d(1, 1, kernel_size=3, stride=4, padding=0)
 
     def forward(self, x):
-        x = x.reshape((-1, 1, self.args.s2_length, self.args.s2_length))
+        x = x.reshape((-1, self.input_channels, self.args.s2_length, self.args.s2_length))
         x = F.relu(self.down_cv1(x))
         x = F.relu(self.up_cv1(x))
         output_size = (self.args.batch_size, 1, SCALE*self.args.s2_length, SCALE*self.args.s2_length)
@@ -180,6 +199,8 @@ def main(args):
         np.random.seed(2021)
         torch.manual_seed(1407)
 
+    assert args.n_time_frames==1, print(f'Not implemented: n_time_frame={args.n_time_frames}')
+
     if args.inference:
         print('not implemented: inference')
         return
@@ -191,7 +212,7 @@ def main(args):
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
     valid_loader = DataLoader(valid_dataset, batch_size=args.batch_size)
     # instantiate the model
-    model = EOModel(args)
+    model = EOModel(args, len(args.bands)+len(args.indices))
     if torch.cuda.is_available():
         model = model.cuda()
     device = model.get_device()
@@ -259,17 +280,22 @@ if __name__=='__main__':
     parser.add_argument('--processed-data-dir', type=str, default='/work/shared_data/2021-ai4eo/dev_data/default/')
     parser.add_argument('--target-dir', type=str, default='.')
     parser.add_argument('--n-processes', type=int, default=4, help='Processes for EOExecutor')
-    parser.add_argument('--n-valid-patches', type=int, default=10, help='Number of EOPatches selected for validation')
-    parser.add_argument('--s2-length', type=int, default=32, help='Cropped EOPatch samples side length')
-    parser.add_argument('--n-time-frames', type=int, default=1, help='Number of time frames in EOPatches')
     parser.add_argument('--overwrite', action='store_true', help='Overwrite the output files')
-    parser.add_argument('--s2-random', action='store_true', 
-                        help='Randomly select overlapping patches (else: systematically select non overlapping patches')
-    parser.add_argument('--n-s2', type=int, default=10, help='number of EOPatches to subsample')
     parser.add_argument('--fixed-random-seed', action='store_true', default=True, help='fixed random seed numpy / torch') 
     parser.add_argument('--inference', action='store_true', default=False, help='run test set inference')
     parser.add_argument('--nni', action='store_true', default=False)
+    # data set hyperparameters
     parser.add_argument('--debug', action='store_true', default=False, help='skip after first batch in training')
+    parser.add_argument('--n-valid-patches', type=int, default=10, help='Number of EOPatches selected for validation')
+    parser.add_argument('--s2-length', type=int, default=32, help='Cropped EOPatch samples side length')
+    parser.add_argument('--n-time-frames', type=int, default=1, help='Number of time frames in EOPatches')
+    parser.add_argument('--s2-random', action='store_true', 
+                        help='Randomly select overlapping patches (else: systematically select non overlapping patches')
+    parser.add_argument('--n-s2', type=int, default=10, help='number of EOPatches to subsample')
+    parser.add_argument('--bands', type=str, nargs='*', default=[],
+                        choices=["B01","B02","B03","B04","B05","B06","B07","B08","B8A","B09","B11","B12"], # from starter notebook
+                        help='Sentinel band names (--> starter notebook')
+    parser.add_argument('--indices', type=str, nargs='*', default=['NDVI'], choices=["NDVI", "NDWI", "NDBI"])
     # network and training hyperparameters
     parser.add_argument('--learning-rate', type=float, default=1e-3)
     parser.add_argument('--batch-size', type=int, default=64)

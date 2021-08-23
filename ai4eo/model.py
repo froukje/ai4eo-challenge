@@ -112,15 +112,16 @@ class EOModel(nn.Module):
     def __init__(self, args):
         # stub: add proper architecture
         super().__init__()
-        self.lr1 = nn.Linear(args.s2_length * args.s2_length, 16)
-        self.lr2 = nn.Linear(16, SCALE * SCALE * args.s2_length * args.s2_length)
+        self.args = args
+        self.down_cv1 = nn.Conv2d(1, args.filters, kernel_size=3, padding=1)
+        self.up_cv1   = nn.ConvTranspose2d(args.filters, 1, kernel_size=3, padding=1)
+        self.up_cv2   = nn.ConvTranspose2d(1, 1, kernel_size=3, stride=4, padding=0)
 
     def forward(self, x):
-        # stub: returns batch_size random images with correct dimension
-        x = torch.flatten(x, 1)
-        x = F.relu(self.lr1(x))
-        x = self.lr2(x)
-        x = torch.reshape(x, (-1, SCALE * args.s2_length, SCALE * args.s2_length))
+        x = x.reshape((-1, 1, self.args.s2_length, self.args.s2_length))
+        x = F.relu(self.down_cv1(x))
+        x = F.relu(self.up_cv1(x))
+        x = self.up_cv2(x, output_size=(args.batch_size, 1, SCALE*args.s2_length, SCALE*args.s2_length))
         return x
 
     # Other useful functions
@@ -224,7 +225,7 @@ def main(args):
         valid_losses, preds = [], []
         for idx, (inputs, target, weight) in enumerate(valid_loader):
             loss, pred = predict(inputs, target, weight, model, eval_=True)
-            valid_losses.append(loss.detach().numpy())
+            valid_losses.append(loss.detach().cpu().numpy())
             preds.append(pred)
         valid_loss = np.mean(np.array(valid_losses))
         pred = np.concatenate(pred, axis=0)
@@ -271,6 +272,7 @@ if __name__=='__main__':
     # network and training hyperparameters
     parser.add_argument('--learning-rate', type=float, default=1e-3)
     parser.add_argument('--batch-size', type=int, default=64)
+    parser.add_argument('--filters', type=int, default=8)
     parser.add_argument('--max-epochs', type=int, default=100)
     parser.add_argument('--patience', type=int, default=6, help='early stopping patience, -1 for no early stopping')
 

@@ -125,7 +125,7 @@ class SubPixelConvolutionalBlock(pl.LightningModule):
     """
     A subpixel convolutional block, comprising convolutional, pixel-shuffle, and PReLU activation layers.
     """
-    def __init__(self, args, scaling_factor=2):#kernel_size=3, n_channels=64, scaling_factor=2):
+    def __init__(self, args, scaling_factor=2):
         """
         :param kernel_size: kernel size of the convolution
         :param n_channels: number of input and output channels
@@ -198,14 +198,15 @@ class SRResNet(pl.LightningModule):
         :param n_blocks: number of residual blocks
         :param scaling_factor: factor to scale input images by (along both dimensions) in the subpixel convolutional block
         """
+        self.args = args
         super(SRResNet, self).__init__()
 
         # Scaling factor must be 2, 4 or 8
         scaling_factor = int(args.scaling_factor)
-        assert scaling_factor in {2, 4, 8}, "The scaling facot must be 2, 4, or 8!"
+        assert scaling_factor in {2, 4, 8}, "The scaling factor must be 2, 4, or 8!"
 
         # First convolutional block
-        self.conv_block1 = ConvolutionalBlock(in_channels=3, out_channels=args.n_channels, 
+        self.conv_block1 = ConvolutionalBlock(in_channels=args.input_channels, out_channels=args.n_channels, 
                 kernel_size=args.large_kernel_size,
                 batch_norm=False, activation='PReLu')
 
@@ -226,8 +227,11 @@ class SRResNet(pl.LightningModule):
                 )
 
         # Last convolutional block
-        self.conv_block3 = ConvolutionalBlock(in_channels=args.n_channels, out_channels=3,
+        self.conv_block3 = ConvolutionalBlock(in_channels=args.n_channels, out_channels=1,
                 kernel_size=args.large_kernel_size, batch_norm=False, activation='Tanh')
+
+        # Final sigmoid layer
+        self.sigmoid = nn.Sigmoid()
 
     def forward(self, lr_imgs):
         """
@@ -236,13 +240,16 @@ class SRResNet(pl.LightningModule):
         :param lr_imgs: low-resolution input images, a tensor of size (N, 3, w, h)
         :return: super-resolution output images, a tensor of size (N, 3, w * scaling factor, h * scaling factor)
         """
-        output = self.conv_block1(lr_imgs) # (N, 3, w, h)
+        output = self.conv_block1(lr_imgs) # (N, input_channels, w, h)
         residual = output # (N, n_channels, w, h)
         output = self.residual_blocks(output) # (N, n_channels, w, h)
         output =self.conv_block2(output) # (N, n_channels, w, h)
         output = output + residual
-        output = self.subpixel_convolutional_blocks(output) # (N, 3, w * scaling factor, h * scaling factor)
-        sr_imgs = self.conv_block3(output) # (N, 3, w * scaling factor, h * scaling factor)
+        output = self.subpixel_convolutional_blocks(output) # (N, n_channels, w * scaling factor, h * scaling factor)
+        sr_imgs = self.conv_block3(output) # (N, 1, w * scaling factor, h * scaling factor)
+        if self.args.sigmoid:
+            sr_imgs = self.sigmoid(sr_imgs)
+        sr_imgs = sr_imgs.round() # reduce to image containing only 1 and 0
         return sr_imgs
 
     def configure_optimizers(self):
@@ -339,10 +346,12 @@ if __name__ == '__main__':
     parser.add_argument('--learning_rate', type=float, default=1e-3)
     parser.add_argument('--scaling_factor', type=int, default=4) # the scaling factor for the generator; the input LR images will be downsampled from the target HR images by this factor
     parser.add_argument('--n_channels', type=int, default=64)  # number of channels in-between, i.e. the input and output channels for the residual and subpixel convolutional blocks# number of residual blocks
+    parser.add_argument('--input_channels', type=int, default=3)  # number of input channels, default for RGB image: 3
     parser.add_argument('--large_kernel_size', type=int, default=9) # kernel size of the first and last convolutions which transform the inputs and outputs
     parser.add_argument('--small_kernel_size', type=int, default=3) # kernel size of all convolutions in-between, i.e. those in the residual and subpixel convolutional blocks 
     parser.add_argument('--n_blocks', type=int, default=16) # number of residual blocks
     parser.add_argument('--n_epochs', type=int, default=200)
+    parser.add_argument('--sigmoid', action='store_true')
     parser.add_argument('--nni', action='store_true')
     parser = pl.Trainer.add_argparse_args(parser)
     args = parser.parse_args()

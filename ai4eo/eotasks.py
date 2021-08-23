@@ -31,6 +31,8 @@ from scipy.stats import skewnorm
 from skimage import measure
 from skimage.morphology import binary_dilation, disk
 
+import torch
+
 class SamplePatchletsTask(EOTask):
     '''
     Sample patchlets from EOTask
@@ -252,4 +254,35 @@ class AddWeightMapTask(EOTask):
 
         eopatch[self.weight_feature] = weight_map[..., np.newaxis]
         
+        return eopatch
+
+class PredictPatchTask(EOTask):
+    """
+    https://eo-learn.readthedocs.io/en/latest/examples/land-cover-map/SI_LULC_pipeline.html#6.-Model-construction-and-training
+    Task to make model predictions on a patch. Provide the model 
+    """
+    def __init__(self, model, features_feature):
+        self.model = model
+        self.features_feature = features_feature
+
+    def execute(self, eopatch):
+        print(' --- !! debug mode !! --- ')
+        pred_eopatch = EOPatch(bbox=eopatch.bbox)
+        # TODO apply the model here
+        # TODO repeat the preprocessing from EODataset
+        x = eopatch.data['NDVI'][0]
+        x = torch.tensor(x.astype(np.float32))
+        with torch.no_grad():
+            prediction = self.model(x)
+        # reshape to expected output shape
+        prediction = prediction.numpy().squeeze()
+        prediction = prediction[:, :, np.newaxis]
+        # cast to bool TODO
+        print(' --- !! manually casting to bool, replace with model output layer !! ---')
+        prediction = prediction > 0
+        prediction = prediction.astype(np.bool)
+        pred_eopatch[(FeatureType.MASK_TIMELESS, 'PREDICTION')] = prediction
+        print(pred_eopatch)
+        return pred_eopatch
+
         return eopatch

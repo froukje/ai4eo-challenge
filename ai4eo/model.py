@@ -121,7 +121,8 @@ class EOModel(nn.Module):
         x = x.reshape((-1, 1, self.args.s2_length, self.args.s2_length))
         x = F.relu(self.down_cv1(x))
         x = F.relu(self.up_cv1(x))
-        x = self.up_cv2(x, output_size=(args.batch_size, 1, SCALE*args.s2_length, SCALE*args.s2_length))
+        output_size = (self.args.batch_size, 1, SCALE*self.args.s2_length, SCALE*self.args.s2_length)
+        x = self.up_cv2(x, output_size=output_size)
         return x
 
     # Other useful functions

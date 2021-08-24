@@ -247,8 +247,7 @@ class SRResNet(pl.LightningModule):
         output = output + residual
         output = self.subpixel_convolutional_blocks(output) # (N, n_channels, w * scaling factor, h * scaling factor)
         sr_imgs = self.conv_block3(output) # (N, 1, w * scaling factor, h * scaling factor)
-        if self.args.sigmoid:
-            sr_imgs = self.sigmoid(sr_imgs)
+        sr_imgs = self.sigmoid(sr_imgs)
         sr_imgs = sr_imgs.round() # reduce to image containing only 1 and 0
         return sr_imgs
 
@@ -351,7 +350,6 @@ if __name__ == '__main__':
     parser.add_argument('--small_kernel_size', type=int, default=3) # kernel size of all convolutions in-between, i.e. those in the residual and subpixel convolutional blocks 
     parser.add_argument('--n_blocks', type=int, default=16) # number of residual blocks
     parser.add_argument('--n_epochs', type=int, default=200)
-    parser.add_argument('--sigmoid', action='store_true')
     parser.add_argument('--nni', action='store_true')
     parser = pl.Trainer.add_argparse_args(parser)
     args = parser.parse_args()

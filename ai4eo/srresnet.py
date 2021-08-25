@@ -248,7 +248,7 @@ class SRResNet(pl.LightningModule):
         output = self.subpixel_convolutional_blocks(output) # (N, n_channels, w * scaling factor, h * scaling factor)
         sr_imgs = self.conv_block3(output) # (N, 1, w * scaling factor, h * scaling factor)
         sr_imgs = self.sigmoid(sr_imgs)
-        sr_imgs = sr_imgs.round() # reduce to image containing only 1 and 0
+        #sr_imgs = sr_imgs.round() # reduce to image containing only 1 and 0
         return sr_imgs
 
     def configure_optimizers(self):

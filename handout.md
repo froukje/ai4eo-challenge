@@ -36,25 +36,37 @@ Create the singularity image:
 Create an allocation for an interactive job on any of the amd nodes
 
 1. `ssh trial.dkrz.de`
-2. `salloc`
-3. `ssh vader{N}`
-4. Start the singularity container, taking care of the following: `--nv` for nvidia GPUs, bind cache to a writable folder (I used scratch space), bind shared data so it is visible when you work in the container: `singularity shell --nv --bind /scratch/k/$USER/singularity/cache:/home/jovyan/.cache --bind /mnt/lustre02/work/ka1176/:/swork /work/ka1176/caroline/gitlab/ai4eo-challenge/ai4eo_latest.sif`
+2. `salloc --partition=amd --time=04:00:00 --exclusive -A ka1176`
+3. `ssh vader{N}` (use `squeue` to see where your interactive job is running)
+4. Start the singularity container: `singularity shell --nv --bind /scratch/k/$USER/singularity/cache:/home/jovyan/.cache --bind /mnt/lustre02/work/ka1176/:/swork /work/ka1176/caroline/gitlab/ai4eo-challenge/ai4eo_latest.sif`
 
-The `/work/ka1176/` folder is now available at `/swork/`
+Options in detail: `--nv` for nvidia GPUs, bind cache to a writable folder (I used scratch space), bind shared data so it is visible when you work in the container. The `/work/ka1176/` folder is now available at `/swork/`.
 
 Now we need to activate the conda environment:
 
-TODO
-
-1. opt ...
-2. list the environments
-3. conda activate the environment
+1. `. "/opt/conda/etc/profile.d/conda.sh"`
+2. `conda env list`
+3. `conda activate eurodatacube-gpu-`
 
 
 ## Run the model 
 
-TODO
+Run the model with the appropriate input parameters, one example:
+
+`python model.py --processed-data-dir /swork/shared_data/2021-ai4eo/dev_data/default/ --n-s2 1 --max-epochs 50 --learning-rate 1e-4 --batch-size 32 --scaling-factor 4 --large-kernel-size 9 --small-kernel-size 3 --patience 50  --n-channels 32 --input-channels 4 --bands B02 B03 B04`
+
+The best model is saved.
 
 ## Create the submission file
 
-TODO
+Update the parameters in `create_submission.sh` to the ones you used to train the model in the step before (sorry for the inconvenience). Run the script
+
+`sh create_submission.sh $SUBMISSION_FOLDER`
+
+Use the notebook `submission.ipynb` to visualize your submission.
+
+## Upload the submission
+
+Login to the AI4EO challenge website and upload the `.tar.gz` folder. Shortly, the result will appear on the leaderboard.
+
+`DONE!`

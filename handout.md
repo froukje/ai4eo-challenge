@@ -1,4 +1,4 @@
-## How to get started with singularity on vader
+## Challenge: the technical part
 
 Documentation for using singularity on mistral:
 https://www.dkrz.de/up/systems/mistral/singularity

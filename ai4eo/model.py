@@ -1,5 +1,10 @@
 #!/usr/bin/env python
 
+try: 
+    import nni
+except ImportError:
+    pass
+
 import torch
 from torch import nn
 import torch.nn.functional as F
@@ -9,15 +14,18 @@ from torch.utils.data import Dataset, DataLoader
 import argparse
 import os
 import time
+import datetime
 from collections import defaultdict
 import copy
 
 import numpy as np
 from sklearn.metrics import matthews_corrcoef
+import math
 
 from eolearn.core import LoadTask
 
 import eotasks
+from srresnet_ai4eo import ConvolutionalBlock, SubPixelConvolutionalBlock, ResidualBlock, SRResNet 
 
 SCALE = 4
 
@@ -187,10 +195,9 @@ def main(args):
         pred = pred.cpu().flatten()
         weight = weight.cpu().flatten()
 
-        # https://scikit-learn.org/stable/modules/generated/sklearn.metrics.matthews_corrcoef.html
-        # make it a loss function: +1 is perfect correlation
-        loss = 1 - matthews_corrcoef(target, pred, sample_weight=weight)
-        loss = torch.tensor(loss, dtype=torch.float32, requires_grad=True, device=device)
+        # use mse loss
+        criterion = nn.MSELoss()
+        loss = criterion(y_hat, y)
 
         return loss, pred_values
 
@@ -212,7 +219,8 @@ def main(args):
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
     valid_loader = DataLoader(valid_dataset, batch_size=args.batch_size)
     # instantiate the model
-    model = EOModel(args, len(args.bands)+len(args.indices))
+    #model = EOModel(args, len(args.bands)+len(args.indices))
+    model = SRResNet(args)
     if torch.cuda.is_available():
         model = model.cuda()
     device = model.get_device()
@@ -275,10 +283,26 @@ def main(args):
     torch.save(best_model.state_dict(), save_model_path)
     print(f'saved best model to {save_model_path}')
 
+
+def add_nni_params(args):
+    args_nni = nni.get_next_paramteter()
+    assert all([key in args for key in ars_nni.keys()], 'need only valid parameters'
+    args_dict = vars(args)
+    # cast params that should be int to int if needed (nni may offer them as float)
+    args_nni_casted = {key:(int(value) if type(args_dict[key]) is int else value) for key, value in args_nni.items()}
+    args_dict.update(args_nni_casted)
+    # adjust paths of model and prediction outputs so they get saved together with the other outputs
+    nni_output_dir = os.path.expandvars('$NNI_OUTPUT_DIR')
+    for param in ['save_model_path', 'target_dir']:
+        nni_path = os.path.join(nni_output_dir, os.path.basename(args_dict[param]))
+        args_dict[param] = nni_path
+    return args
+
 if __name__=='__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--processed-data-dir', type=str, default='/work/shared_data/2021-ai4eo/dev_data/default/')
     parser.add_argument('--target-dir', type=str, default='.')
+    parser.add_argument('--save model-path', type=str, default='saved_models') 
     parser.add_argument('--n-processes', type=int, default=4, help='Processes for EOExecutor')
     parser.add_argument('--overwrite', action='store_true', help='Overwrite the output files')
     parser.add_argument('--fixed-random-seed', action='store_true', default=True, help='fixed random seed numpy / torch') 
@@ -302,8 +326,22 @@ if __name__=='__main__':
     parser.add_argument('--filters', type=int, default=8)
     parser.add_argument('--max-epochs', type=int, default=100)
     parser.add_argument('--patience', type=int, default=6, help='early stopping patience, -1 for no early stopping')
-
+    # the scaling factor (for the Generator), the input LR images will be downsampled from the target HR images by this factor 
+    parser.add_argument('--scaling_factor', type=int, default=4)
+    # number of channels in-between, i.e. the input and output channels for the residual and subpixel convolutional blocks
+    parser.add_argument('--n_channels', type=int, default=64)
+    parser.add_argument('--input_channels', type=int, default=3)  # number of input channels, default for RGB image: 3
+    # kernel size of the first and last convolutions which transform the inputs and outputs
+    parser.add_argument('--large_kernel_size', type=int, default=9)
+    # kernel size of all convolutions in-between, i.e. those in the residual and subpixel convolutional blocks
+    arser.add_argument('--small_kernel_size', type=int, default=3)
+    parser.add_argument('--n_blocks', type=int, default=16) # number of residual blocks
+    # TODO: add activation function to argparse
+    parser.add_argument('--nni', action='store_true') 
     args = parser.parse_args()
+
+    if args.nni:
+        args = add_nni_params(args)
 
     print('\n*** begin args key / value ***')
     for key, value in vars(args).items():

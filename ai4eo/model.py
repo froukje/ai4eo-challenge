@@ -301,10 +301,10 @@ def calc_evaluation_metric(target, pred):
     pred_ones = (pred.round() == 1)
     pred_zeros = ~pred_ones
 
-    TP = np.count_nonzero(np.logical_and(pred_ones, true_ones.squeeze()))
-    FN = np.count_nonzero(np.logical_and(pred_zeros, true_ones.squeeze()))
-    FP = np.count_nonzero(np.logical_and(pred_ones, true_zeros.squeeze()))
-    TN = np.count_nonzero(np.logical_and(pred_zeros, true_zeros.squeeze()))
+    TP = float(np.count_nonzero(np.logical_and(pred_ones, true_ones)))
+    FN = float(np.count_nonzero(np.logical_and(pred_zeros, true_ones)))
+    FP = float(np.count_nonzero(np.logical_and(pred_ones, true_zeros)))
+    TN = float(np.count_nonzero(np.logical_and(pred_zeros, true_zeros)))
     print(f'TP: {TP}')
     print(f'FN: {FN}')
     print(f'FP: {FP}')

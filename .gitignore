@@ -3,3 +3,4 @@ data/*
 ai4eo/eoexecution-report*
 debug*txt
 *.tar.gz
+ai4eo/__pycache__

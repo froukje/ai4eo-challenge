@@ -286,7 +286,7 @@ def main(args):
 
 def add_nni_params(args):
     args_nni = nni.get_next_paramteter()
-    assert all([key in args for key in ars_nni.keys()], 'need only valid parameters'
+    assert all([key in args for key in ars_nni.keys()]), 'need only valid parameters'
     args_dict = vars(args)
     # cast params that should be int to int if needed (nni may offer them as float)
     args_nni_casted = {key:(int(value) if type(args_dict[key]) is int else value) for key, value in args_nni.items()}

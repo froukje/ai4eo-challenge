@@ -372,6 +372,8 @@ if __name__=='__main__':
     if args.nni:
         args = add_nni_params(args)
 
+    assert(args.input_channels == (len(args.bands) + 1)), "nr of input channels needs to be one more than nr of bands!"  
+
     print('\n*** begin args key / value ***')
     for key, value in vars(args).items():
         print(f'{key:20s}: {value}')

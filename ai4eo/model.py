@@ -260,9 +260,11 @@ def main(args):
         valid_loss = np.mean(np.array(valid_losses))
         pred = np.concatenate(pred, axis=0)
         print(f'Validation took {(time.time() - start_time) / 60:.2f} minutes, valid_loss: {valid_loss:.4f}')
+        mcc = calc_evaluation_metric(target, pred)
         # nni
         if args.nni:
-            nni.report_intermediate_result(valid_loss)
+            #nni.report_intermediate_result(valid_loss)
+            nni.report_intermediate_result(mcc)
         # early stopping
         if valid_loss < best_loss:
             best_model = copy.deepcopy(model)
@@ -276,12 +278,37 @@ def main(args):
             print(f'no improvement for {args.patience} epochs, early stopping')
             break
 
+    mcc_final = calc_evaluation_loss(target, best_pred)
     if args.nni:
-        nni.report_final_result(best_valid_loss)
+        #nni.report_final_result(best_valid_loss)
+        nn.report_final_result(mcc_final)
     # TODO save best model and predictions to disk
     save_model_path = os.path.join(args.target_dir, 'best_model.pt')
     torch.save(best_model.state_dict(), save_model_path)
     print(f'saved best model to {save_model_path}')
+
+def calc_evaluation_metric(target, pred):
+    '''
+    calculate evaluation metric MCC as given in the task
+    '''
+    if target.is_cuda:
+        target, pred = target.detach().cpu().numpy(), pred.detach().cpu().numpy()
+    else:
+        target = target.int().numpy()
+
+    true_ones = (target == 1)
+    true_zeros = ~true_ones
+    pred_ones = (pred.round() == 1)
+    pred_zeros = ~pred_ones
+
+    TP = np.count_nonzero(np.logical_and(pred_ones, true_ones))
+    FN = np.count_nonzero(np.logical_and(pred_zeros, true_ones))
+    FP = np.count_nonzero(np.logical_and(pred_ones, true_zeros))
+    TN = np.count_nonzero(np.logical_and(pred_zeros, true_zeros))
+
+    MCC = (TP * TN - FP * FN) / np.sqrt((TP + FP) * (TP + FN) * (TN + FP) * (TN + FN))
+    print(f'evaluation metric MCC: {MCC}')
+    return MCC
 
 
 def add_nni_params(args):

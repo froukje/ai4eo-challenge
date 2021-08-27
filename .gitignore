@@ -4,3 +4,4 @@ ai4eo/eoexecution-report*
 debug*txt
 *.tar.gz
 ai4eo/__pycache__
+ai4eo/best_model.pt

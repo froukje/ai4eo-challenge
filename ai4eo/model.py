@@ -20,7 +20,6 @@ import copy
 
 import numpy as np
 from sklearn.metrics import matthews_corrcoef
-import math
 
 from eolearn.core import LoadTask
 
@@ -115,6 +114,8 @@ class EODataset(Dataset):
 
             lowres.append(np.array(x))
             y = patch.mask_timeless['CULTIVATED']
+            y = y.swapaxes(0,2)
+            y = y.swapaxes(1,2)
             target.append(y.astype(np.float32))
             w = patch.data_timeless['WEIGHTS']
             weight.append(w.astype(np.float32))
@@ -169,6 +170,7 @@ def main(args):
         values as numpy arrays."""
 
         device = model.get_device()
+        print(device)
 
         inputs = inputs.to(device)
         target = target.to(device)
@@ -187,17 +189,17 @@ def main(args):
 
         # TODO pred / target dimension
         # TODO masking should be done in the network output layer
-        pred = torch.reshape(pred, (len(inputs), -1)) > 0
-        target = torch.reshape(target, (len(inputs), -1)) > 0
-        weight = torch.reshape(weight, (len(inputs), -1))
+        #pred = torch.reshape(pred, (len(inputs), -1)) > 0
+        #target = torch.reshape(target, (len(inputs), -1)) > 0
+        #weight = torch.reshape(weight, (len(inputs), -1))
         # to cpu for sklearn (inefficient)
-        target = target.cpu().flatten()
-        pred = pred.cpu().flatten()
-        weight = weight.cpu().flatten()
+        #target = target.cpu().flatten()
+        #pred = pred.cpu().flatten()
+        #weight = weight.cpu().flatten()
 
         # use mse loss
         criterion = nn.MSELoss()
-        loss = criterion(y_hat, y)
+        loss = criterion(pred, target)
 
         return loss, pred_values
 
@@ -221,8 +223,8 @@ def main(args):
     # instantiate the model
     #model = EOModel(args, len(args.bands)+len(args.indices))
     model = SRResNet(args)
-    if torch.cuda.is_available():
-        model = model.cuda()
+    #if torch.cuda.is_available():
+    #    model = model.cuda()
     device = model.get_device()
     print(f'\nDevice {model.get_device()}')
     # optimizer
@@ -252,15 +254,19 @@ def main(args):
         start_time = time.time()
         # validation
         model = model.eval()
-        valid_losses, preds = [], []
+        valid_losses, preds ,targets = [], [], []
         for idx, (inputs, target, weight) in enumerate(valid_loader):
             loss, pred = predict(inputs, target, weight, model, eval_=True)
             valid_losses.append(loss.detach().cpu().numpy())
             preds.append(pred)
+            targets.append(target)
         valid_loss = np.mean(np.array(valid_losses))
-        pred = np.concatenate(pred, axis=0)
+        preds = np.concatenate(preds, axis=0)
+        targets = np.concatenate(targets, axis=0)
+        print(preds.shape)
+        print(targets.shape)
         print(f'Validation took {(time.time() - start_time) / 60:.2f} minutes, valid_loss: {valid_loss:.4f}')
-        mcc = calc_evaluation_metric(target, pred)
+        mcc = calc_evaluation_metric(targets, preds)
         # nni
         if args.nni:
             #nni.report_intermediate_result(valid_loss)
@@ -277,8 +283,7 @@ def main(args):
         if patience_count == args.patience:
             print(f'no improvement for {args.patience} epochs, early stopping')
             break
-
-    mcc_final = calc_evaluation_loss(target, best_pred)
+    mcc_final = calc_evaluation_metric(targets, np.stack(best_preds))
     if args.nni:
         #nni.report_final_result(best_valid_loss)
         nn.report_final_result(mcc_final)
@@ -291,21 +296,19 @@ def calc_evaluation_metric(target, pred):
     '''
     calculate evaluation metric MCC as given in the task
     '''
-    if target.is_cuda:
-        target, pred = target.detach().cpu().numpy(), pred.detach().cpu().numpy()
-    else:
-        target = target.int().numpy()
-
     true_ones = (target == 1)
     true_zeros = ~true_ones
     pred_ones = (pred.round() == 1)
     pred_zeros = ~pred_ones
 
-    TP = np.count_nonzero(np.logical_and(pred_ones, true_ones))
-    FN = np.count_nonzero(np.logical_and(pred_zeros, true_ones))
-    FP = np.count_nonzero(np.logical_and(pred_ones, true_zeros))
-    TN = np.count_nonzero(np.logical_and(pred_zeros, true_zeros))
-
+    TP = np.count_nonzero(np.logical_and(pred_ones, true_ones.squeeze()))
+    FN = np.count_nonzero(np.logical_and(pred_zeros, true_ones.squeeze()))
+    FP = np.count_nonzero(np.logical_and(pred_ones, true_zeros.squeeze()))
+    TN = np.count_nonzero(np.logical_and(pred_zeros, true_zeros.squeeze()))
+    print(f'TP: {TP}')
+    print(f'FN: {FN}')
+    print(f'FP: {FP}')
+    print(f'TN: {TN}')
     MCC = (TP * TN - FP * FN) / np.sqrt((TP + FP) * (TP + FN) * (TN + FP) * (TN + FN))
     print(f'evaluation metric MCC: {MCC}')
     return MCC
@@ -361,10 +364,9 @@ if __name__=='__main__':
     # kernel size of the first and last convolutions which transform the inputs and outputs
     parser.add_argument('--large_kernel_size', type=int, default=9)
     # kernel size of all convolutions in-between, i.e. those in the residual and subpixel convolutional blocks
-    arser.add_argument('--small_kernel_size', type=int, default=3)
+    parser.add_argument('--small_kernel_size', type=int, default=3)
     parser.add_argument('--n_blocks', type=int, default=16) # number of residual blocks
     # TODO: add activation function to argparse
-    parser.add_argument('--nni', action='store_true') 
     args = parser.parse_args()
 
     if args.nni:

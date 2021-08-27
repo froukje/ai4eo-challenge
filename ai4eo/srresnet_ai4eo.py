@@ -1,3 +1,11 @@
+import torch
+from torch import nn
+import torch.nn.functional as F
+from torch.utils.data import Dataset, DataLoader
+
+import numpy as np
+import math
+
 class ConvolutionalBlock(nn.Module):
     '''
     Convolutional block: Convolution, BatchNorm, Activation
@@ -182,8 +190,11 @@ class SRResNet(nn.Module):
 
     def get_device(self):
         """Return gpu if available, else cpu"""
-        if torch.cuda.is_available():
-            return 'cuda:0'
-        else:
-            return 'cpu'
+        #if torch.cuda.is_available():
+        #    print('GPU available')
+        #    return 'cuda:0'
+        #else:
+        #    print('running on CPU')
+        #    return 'cpu'
+        return 'cpu'
 

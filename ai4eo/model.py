@@ -170,10 +170,10 @@ def main(args):
         values as numpy arrays."""
 
         device = model.get_device()
-        print(device)
 
         inputs = inputs.to(device)
         target = target.to(device)
+        weight = weight.to(device)
 
         if eval_:
             with torch.no_grad():
@@ -187,19 +187,15 @@ def main(args):
         else:
             pred_values = pred.detach().numpy()
 
-        # TODO pred / target dimension
-        # TODO masking should be done in the network output layer
-        #pred = torch.reshape(pred, (len(inputs), -1)) > 0
-        #target = torch.reshape(target, (len(inputs), -1)) > 0
-        #weight = torch.reshape(weight, (len(inputs), -1))
-        # to cpu for sklearn (inefficient)
-        #target = target.cpu().flatten()
-        #pred = pred.cpu().flatten()
-        #weight = weight.cpu().flatten()
-
         # use mse loss
-        criterion = nn.MSELoss()
-        loss = criterion(pred, target)
+        #criterion = nn.MSELoss()
+        #loss = criterion(pred, target)
+        # use weighted cross entropy loss with two classes
+        S = target.shape[-1]
+        target = target.reshape((-1, S*S))
+        pred   = pred.reshape((-1, S*S))
+        weight = weight.reshape((-1, S*S))
+        loss = F.binary_cross_entropy(pred, target)#, weight=weight)
 
         return loss, pred_values
 
@@ -254,19 +250,23 @@ def main(args):
         start_time = time.time()
         # validation
         model = model.eval()
-        valid_losses, preds ,targets = [], [], []
+        valid_losses, preds ,targets, weights = [], [], [], []
         for idx, (inputs, target, weight) in enumerate(valid_loader):
             loss, pred = predict(inputs, target, weight, model, eval_=True)
             valid_losses.append(loss.detach().cpu().numpy())
             preds.append(pred)
             targets.append(target)
+            weights.append(weight)
         valid_loss = np.mean(np.array(valid_losses))
         preds = np.concatenate(preds, axis=0)
         targets = np.concatenate(targets, axis=0)
-        print(preds.shape)
-        print(targets.shape)
+        weights = np.concatenate(weights, axis=0)
+        #print(preds.shape)
+        #print(targets.shape)
         print(f'Validation took {(time.time() - start_time) / 60:.2f} minutes, valid_loss: {valid_loss:.4f}')
-        mcc = calc_evaluation_metric(targets, preds)
+        cast_preds = (preds > 0.5).astype(np.float32) # sigmoid --> binary
+        mcc = calc_evaluation_metric(targets, cast_preds, weights)
+        #mcc = matthews_corrcoef(targets.flatten(), cast_preds.flatten(), sample_weight=weights.flatten())
         # nni
         if args.nni:
             #nni.report_intermediate_result(valid_loss)
@@ -292,24 +292,25 @@ def main(args):
     torch.save(best_model.state_dict(), save_model_path)
     print(f'saved best model to {save_model_path}')
 
-def calc_evaluation_metric(target, pred):
+def calc_evaluation_metric(target, pred, weight):
     '''
     calculate evaluation metric MCC as given in the task
     '''
-    true_ones = (target == 1)
-    true_zeros = ~true_ones
-    pred_ones = (pred.round() == 1)
-    pred_zeros = ~pred_ones
+    #true_ones = (target == 1)
+    #true_zeros = ~true_ones
+    #pred_ones = (pred.round() == 1)
+    #pred_zeros = ~pred_ones
 
-    TP = float(np.count_nonzero(np.logical_and(pred_ones, true_ones)))
-    FN = float(np.count_nonzero(np.logical_and(pred_zeros, true_ones)))
-    FP = float(np.count_nonzero(np.logical_and(pred_ones, true_zeros)))
-    TN = float(np.count_nonzero(np.logical_and(pred_zeros, true_zeros)))
-    print(f'TP: {TP}')
-    print(f'FN: {FN}')
-    print(f'FP: {FP}')
-    print(f'TN: {TN}')
-    MCC = (TP * TN - FP * FN) / np.sqrt((TP + FP) * (TP + FN) * (TN + FP) * (TN + FN))
+    #TP = float(np.count_nonzero(np.logical_and(pred_ones, true_ones)))
+    #FN = float(np.count_nonzero(np.logical_and(pred_zeros, true_ones)))
+    #FP = float(np.count_nonzero(np.logical_and(pred_ones, true_zeros)))
+    #TN = float(np.count_nonzero(np.logical_and(pred_zeros, true_zeros)))
+    #print(f'TP: {TP}')
+    #print(f'FN: {FN}')
+    #print(f'FP: {FP}')
+    #print(f'TN: {TN}')
+    #MCC = (TP * TN - FP * FN) / np.sqrt((TP + FP) * (TP + FN) * (TN + FP) * (TN + FN))
+    MCC = matthews_corrcoef(target.flatten(), pred.flatten(), sample_weight=weight.flatten())
     print(f'evaluation metric MCC: {MCC}')
     return MCC
 

@@ -190,11 +190,10 @@ class SRResNet(nn.Module):
 
     def get_device(self):
         """Return gpu if available, else cpu"""
-        #if torch.cuda.is_available():
+        if torch.cuda.is_available():
         #    print('GPU available')
-        #    return 'cuda:0'
+            return 'cuda:0'
         #else:
         #    print('running on CPU')
         #    return 'cpu'
         return 'cpu'
-

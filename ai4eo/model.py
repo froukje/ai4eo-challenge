@@ -223,8 +223,8 @@ def main(args):
     # instantiate the model
     #model = EOModel(args, len(args.bands)+len(args.indices))
     model = SRResNet(args)
-    #if torch.cuda.is_available():
-    #    model = model.cuda()
+    if torch.cuda.is_available():
+        model = model.cuda()
     device = model.get_device()
     print(f'\nDevice {model.get_device()}')
     # optimizer

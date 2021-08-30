@@ -195,7 +195,7 @@ def main(args):
         target = target.reshape((-1, S*S))
         pred   = pred.reshape((-1, S*S))
         weight = weight.reshape((-1, S*S))
-        loss = F.binary_cross_entropy(pred, target)#, weight=weight)
+        loss = F.binary_cross_entropy(pred, target, weight=weight)
 
         return loss, pred_values
 
@@ -230,6 +230,9 @@ def main(args):
     best_loss = np.inf
     best_epoch = 0
     patience_count = 0
+    # history
+    all_train_losses = []
+    all_valid_losses = []
 
     for epoch in range(args.max_epochs):
         # train
@@ -246,6 +249,7 @@ def main(args):
             if args.debug:
                 break
         train_loss = np.mean(np.array(train_losses))
+        all_train_losses.append(train_loss)
         print(f'Training took {(time.time() - start_time) / 60:.2f} minutes, train_loss: {train_loss:.4f}')
         start_time = time.time()
         # validation
@@ -258,15 +262,15 @@ def main(args):
             targets.append(target)
             weights.append(weight)
         valid_loss = np.mean(np.array(valid_losses))
+        all_valid_losses.append(valid_loss)
         preds = np.concatenate(preds, axis=0)
         targets = np.concatenate(targets, axis=0)
         weights = np.concatenate(weights, axis=0)
         #print(preds.shape)
         #print(targets.shape)
         print(f'Validation took {(time.time() - start_time) / 60:.2f} minutes, valid_loss: {valid_loss:.4f}')
-        cast_preds = (preds > 0.5).astype(np.float32) # sigmoid --> binary
-        mcc = calc_evaluation_metric(targets, cast_preds, weights)
-        #mcc = matthews_corrcoef(targets.flatten(), cast_preds.flatten(), sample_weight=weights.flatten())
+        #cast_preds = (preds > 0.5).astype(np.float32) # sigmoid --> binary
+        #mcc = calc_evaluation_metric(targets, cast_preds, weights)
         # nni
         if args.nni:
             #nni.report_intermediate_result(valid_loss)
@@ -275,6 +279,7 @@ def main(args):
         if valid_loss < best_loss:
             best_model = copy.deepcopy(model)
             best_preds = preds
+            cast_best_preds = (best_preds > 0.5).astype(np.float32)
             best_loss = valid_loss
             patience_count = 0
         else:
@@ -283,14 +288,21 @@ def main(args):
         if patience_count == args.patience:
             print(f'no improvement for {args.patience} epochs, early stopping')
             break
-    mcc_final = calc_evaluation_metric(targets, np.stack(best_preds))
+    mcc_final = calc_evaluation_metric(targets.flatten(), cast_best_preds.flatten(), weights.flatten())
     if args.nni:
         #nni.report_final_result(best_valid_loss)
         nn.report_final_result(mcc_final)
-    # TODO save best model and predictions to disk
+    # save best model and TODO predictions to disk
     save_model_path = os.path.join(args.target_dir, 'best_model.pt')
     torch.save(best_model.state_dict(), save_model_path)
     print(f'saved best model to {save_model_path}')
+    # save training history
+    with open(os.path.join(args.target_dir, 'train_losses.txt'), 'w') as f:
+        for tl in all_train_losses:
+            f.write(f'{tl:.4f}\n')
+    with open(os.path.join(args.target_dir, 'valid_losses.txt'), 'w') as f:
+        for vl in all_valid_losses:
+            f.write(f'{vl:.4f}\n')
 
 def calc_evaluation_metric(target, pred, weight):
     '''

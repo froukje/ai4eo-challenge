@@ -156,6 +156,9 @@ if __name__=='__main__':
     parser.add_argument('--scaling_factor', type=int, default=4)
     parser.add_argument('--n_channels', type=int, default=64)
     parser.add_argument('--input_channels', type=int, default=3)
+    parser.add_argument('--bands', type=str, nargs='*', default=[],
+                        choices=["B01","B02","B03","B04","B05","B06","B07","B08","B8A","B09","B11","B12"], # from starter notebook
+                        help='Sentinel band names (--> starter notebook')
     parser.add_argument('--large_kernel_size', type=int, default=9)
     parser.add_argument('--small_kernel_size', type=int, default=3)
     parser.add_argument('--n_blocks', type=int, default=16)

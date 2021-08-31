@@ -169,7 +169,7 @@ def main(args):
         """Runs the prediction for a given model on data. Returns the loss together with the predicted
         values as numpy arrays."""
 
-        device = model.get_device(best_)
+        device = model.get_device()
 
         inputs = inputs.to(device)
         target = target.to(device)
@@ -324,7 +324,7 @@ def calc_evaluation_metric(target, pred, weight):
     #print(f'TN: {TN}')
     #MCC = (TP * TN - FP * FN) / np.sqrt((TP + FP) * (TP + FN) * (TN + FP) * (TN + FN))
     MCC = matthews_corrcoef(target.flatten(), pred.flatten(), sample_weight=weight.flatten())
-    print(f'evaluation metric MCC: {MCC}')
+    print(f'evaluation metric MCC: {MCC:.4f}')
     return MCC
 
 

@@ -277,9 +277,8 @@ class PredictPatchTask(EOTask):
         # reshape to expected output shape
         prediction = prediction.numpy().squeeze()
         prediction = prediction[:, :, np.newaxis]
-        # cast to bool TODO
-        print(' --- !! manually casting to bool, replace with model output layer !! ---')
-        prediction = prediction > 0
+        # cast to bool 
+        prediction = np.round(prediction)
         prediction = prediction.astype(np.bool)
         pred_eopatch[(FeatureType.MASK_TIMELESS, 'PREDICTION')] = prediction
         print(pred_eopatch)

@@ -169,7 +169,7 @@ def main(args):
         """Runs the prediction for a given model on data. Returns the loss together with the predicted
         values as numpy arrays."""
 
-        device = model.get_device()
+        device = model.get_device(best_)
 
         inputs = inputs.to(device)
         target = target.to(device)
@@ -281,6 +281,7 @@ def main(args):
             best_preds = preds
             cast_best_preds = (best_preds > 0.5).astype(np.float32)
             best_loss = valid_loss
+            mcc = calc_evaluation_metric(targets, cast_best_preds, weights)
             patience_count = 0
         else:
             patience_count += 1

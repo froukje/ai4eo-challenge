@@ -75,7 +75,7 @@ Login to the AI4EO challenge website and upload the `.tar.gz` folder. Shortly, t
 
 Often it will make sense to submit training the model as a slurm job, rather than running an interactive session. 
 
-```
+```bash
 #!/bin/bash
 #SBATCH -p amd
 #SBATCH -A ka1176

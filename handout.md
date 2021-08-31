@@ -70,3 +70,33 @@ Use the notebook `submission.ipynb` to visualize your submission.
 Login to the AI4EO challenge website and upload the `.tar.gz` folder. Shortly, the result will appear on the leaderboard.
 
 `DONE!`
+
+## Alternative: submit the job
+
+Often it will make sense to submit training the model as a slurm job, rather than running an interactive session. 
+
+`#!/bin/bash`
+`#SBATCH -p amd`
+#SBATCH -A ka1176
+#SBATCH --mem=0
+#SBATCH --exclusive
+#SBATCH --time=48:00:00
+
+hostname
+
+module load /sw/spack-amd/spack/modules/linux-centos8-zen2/singularity/3.7.0-gcc-10.2.0
+
+# we will bind the folder /work/ka1176 to /swork in the singularity container
+gitdir_c=/swork/caroline/gitlab/ai4eo-challenge/ai4eo  # gitlab dir (change this to gitlab directory as it would appear in the container)
+scriptdir_c=/swork/caroline/jobs/ai4eo/tests           # script dir (change this to current directory as it would appear in the container)
+
+# create run script for the job
+echo "echo 'HELLO BOX'" > singularity_run.sh
+echo "gitdir=$gitdir_c" >> singularity_run.sh
+echo ". /opt/conda/etc/profile.d/conda.sh" >> singularity_run.sh
+echo "conda activate eurodatacube-gpu-" >> singularity_run.sh
+echo "echo \$gitdir" >> singularity_run.sh
+echo "python \$gitdir/model.py --processed-data-dir /swork/shared_data/2021-ai4eo/dev_data/default/ --n-s2 225 --bands B02 B03 B04 --max-epochs 1 --input_channels 4 --learning-rate 1e-4 --patience 1000000" >> singularity_run.sh
+
+# execute the singularity container
+singularity exec --nv --bind /scratch/k/k202141/singularity/cache:/home/jovyan/.cache --bind /mnt/lustre02/work/ka1176/:/swork /work/ka1176/caroline/gitlab/ai4eo-challenge/ai4eo2_latest.sif bash $scriptdir_c/singularity_run.sh

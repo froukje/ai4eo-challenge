@@ -85,7 +85,7 @@ def main(args):
     model_state = torch.load(args.trained_model)
     eomodel = SRResNet(args)#model.EOModel(args)
     eomodel.load_state_dict(model_state)
-    predict_task = eotasks.PredictPatchTask(eomodel, (FeatureType.DATA, 'BANDS'), args.input_channels, args.indices)
+    predict_task = eotasks.PredictPatchTask(eomodel, (FeatureType.DATA, 'BANDS'), args)#args.input_channels, args.indices)
 
     # EXPORT PREDICTION AS TIFF - copied from starter notebook
     # Export the predicted binary mask as tiff for submission
@@ -142,16 +142,22 @@ def main(args):
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser()
+    parser.add_argument('--fixed-random-seed', action='store_true', default=True, help='fixed random seed numpy / torch')
     parser.add_argument('--trained-model', type=str, default='best_model.pt')
     parser.add_argument('--raw-data-dir', type=str, default='/work/shared_data/2021-ai4eo/eopatches/')
     parser.add_argument('--target-dir', type=str, default='/work/shared_data/2021-ai4eo/submission/')
+    parser.add_argument('--processed-data-dir', type=str, default='/work/shared_data/2021-ai4eo/dev_data/default/')
     parser.add_argument('--n-processes', type=int, default=1, help='Processes for EOExecutor')
     parser.add_argument('--cloud-threshold', type=float, default=0.9, help='threshold for valid data cloud mask')
     #parser.add_argument('--n-time-frames', type=int, default=1, help='Number of time frames in EOPatches')
     parser.add_argument('--overwrite', action='store_true', help='Overwrite the output files')
     # need to pass model specific arguments ehre
+    parser.add_argument('--n-valid-patches', type=int, default=10, help='Number of EOPatches selected for validation')
     parser.add_argument('--filters', type=int, default=8)
     parser.add_argument('--s2-length', type=int, default=500, help='do not change this')
+    parser.add_argument('--n-s2', type=int, default=10, help='number of EOPatches to subsample')
+    parser.add_argument('--s2-random', action='store_true',
+                        help='Randomly select overlapping patches (else: systematically select non overlapping patches')
     parser.add_argument('--batch-size', type=int, default=1, help='do not change this')
     parser.add_argument('--scaling_factor', type=int, default=4)
     parser.add_argument('--n_channels', type=int, default=64)

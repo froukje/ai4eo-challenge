@@ -159,6 +159,8 @@ if __name__=='__main__':
     parser.add_argument('--large_kernel_size', type=int, default=9)
     parser.add_argument('--small_kernel_size', type=int, default=3)
     parser.add_argument('--n_blocks', type=int, default=16)
+    parser.add_argument('--learning-rate', type=float, default=1e-3)
+    parser.add_argument('--max-epochs', type=float, default=1e-3)
     args = parser.parse_args()
 
     print('\n*** begin args key / value ***')

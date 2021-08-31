@@ -92,8 +92,10 @@ class EODataset(Dataset):
 
         # subsample bands and other channels
         print('-- selecting bands --')
-        for band in args.bands:
-            print(f'  {band}')
+        #for band in args.bands:
+        #    print(f'  {band}')
+        if args.input_channels > 1:
+            print(f' {band_names[:args.input_channels-1]}')
         print('-- selecting normalized indices --')
         for index in args.indices:
             print(f'  {index}')
@@ -104,10 +106,13 @@ class EODataset(Dataset):
 
         for patch in small_patches:
             x = []
-            for band in args.bands:
-                band_ix = band_names.index(band)
-                xx = patch.data['BANDS'][tidx][:, :, band_ix]
-                x.append(xx.astype(np.float32))
+            for b in range(args.input_channels - 1):
+                xx = patch.data['BANDS'][tidx][:, :, b+1]
+                x.append(xx.astype(np.float32).squeeze())
+            #for band in args.bands:
+            #    band_ix = band_names.index(band)
+            #    xx = patch.data['BANDS'][tidx][:, :, band_ix]
+            #    x.append(xx.astype(np.float32))
             for index in args.indices:
                 xx = patch.data[index][tidx]
                 x.append(xx.astype(np.float32).squeeze())
@@ -170,7 +175,6 @@ def main(args):
         values as numpy arrays."""
 
         device = model.get_device()
-
         inputs = inputs.to(device)
         target = target.to(device)
         weight = weight.to(device)
@@ -187,9 +191,6 @@ def main(args):
         else:
             pred_values = pred.detach().numpy()
 
-        # use mse loss
-        #criterion = nn.MSELoss()
-        #loss = criterion(pred, target)
         # use weighted cross entropy loss with two classes
         S = target.shape[-1]
         target = target.reshape((-1, S*S))
@@ -269,8 +270,8 @@ def main(args):
         #print(preds.shape)
         #print(targets.shape)
         print(f'Validation took {(time.time() - start_time) / 60:.2f} minutes, valid_loss: {valid_loss:.4f}')
-        #cast_preds = (preds > 0.5).astype(np.float32) # sigmoid --> binary
-        #mcc = calc_evaluation_metric(targets, cast_preds, weights)
+        cast_preds = (preds > 0.5).astype(np.float32) # sigmoid --> binary
+        mcc = calc_evaluation_metric(targets, cast_preds, weights)
         # nni
         if args.nni:
             #nni.report_intermediate_result(valid_loss)
@@ -309,20 +310,6 @@ def calc_evaluation_metric(target, pred, weight):
     '''
     calculate evaluation metric MCC as given in the task
     '''
-    #true_ones = (target == 1)
-    #true_zeros = ~true_ones
-    #pred_ones = (pred.round() == 1)
-    #pred_zeros = ~pred_ones
-
-    #TP = float(np.count_nonzero(np.logical_and(pred_ones, true_ones)))
-    #FN = float(np.count_nonzero(np.logical_and(pred_zeros, true_ones)))
-    #FP = float(np.count_nonzero(np.logical_and(pred_ones, true_zeros)))
-    #TN = float(np.count_nonzero(np.logical_and(pred_zeros, true_zeros)))
-    #print(f'TP: {TP}')
-    #print(f'FN: {FN}')
-    #print(f'FP: {FP}')
-    #print(f'TN: {TN}')
-    #MCC = (TP * TN - FP * FN) / np.sqrt((TP + FP) * (TP + FN) * (TN + FP) * (TN + FN))
     MCC = matthews_corrcoef(target.flatten(), pred.flatten(), sample_weight=weight.flatten())
     print(f'evaluation metric MCC: {MCC:.4f}')
     return MCC
@@ -357,9 +344,9 @@ if __name__=='__main__':
     parser.add_argument('--s2-random', action='store_true', 
                         help='Randomly select overlapping patches (else: systematically select non overlapping patches')
     parser.add_argument('--n-s2', type=int, default=10, help='number of EOPatches to subsample')
-    parser.add_argument('--bands', type=str, nargs='*', default=[],
-                        choices=["B01","B02","B03","B04","B05","B06","B07","B08","B8A","B09","B11","B12"], # from starter notebook
-                        help='Sentinel band names (--> starter notebook')
+    #parser.add_argument('--bands', type=str, nargs='*', default=[],
+    #                    choices=["B01","B02","B03","B04","B05","B06","B07","B08","B8A","B09","B11","B12"], # from starter notebook
+    #                    help='Sentinel band names (--> starter notebook')
     parser.add_argument('--indices', type=str, nargs='*', default=['NDVI'], choices=["NDVI", "NDWI", "NDBI"])
     # network and training hyperparameters
     parser.add_argument('--learning-rate', type=float, default=1e-3)
@@ -371,6 +358,7 @@ if __name__=='__main__':
     parser.add_argument('--scaling_factor', type=int, default=4)
     # number of channels in-between, i.e. the input and output channels for the residual and subpixel convolutional blocks
     parser.add_argument('--n_channels', type=int, default=64)
+    # nr of input channels: 1: no bands, >1 bands B01, B02, etc included
     parser.add_argument('--input_channels', type=int, default=3)  # number of input channels, default for RGB image: 3
     # kernel size of the first and last convolutions which transform the inputs and outputs
     parser.add_argument('--large_kernel_size', type=int, default=9)
@@ -383,7 +371,7 @@ if __name__=='__main__':
     if args.nni:
         args = add_nni_params(args)
 
-    assert(args.input_channels == (len(args.bands) + 1)), "nr of input channels needs to be one more than nr of bands!"  
+    #assert(args.input_channels == (len(args.bands) + 1)), "nr of input channels needs to be one more than nr of bands!"  
 
     print('\n*** begin args key / value ***')
     for key, value in vars(args).items():

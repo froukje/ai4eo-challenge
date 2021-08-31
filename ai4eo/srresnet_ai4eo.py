@@ -48,14 +48,14 @@ class ConvolutionalBlock(nn.Module):
         # put together the convolutional block as a sequence of the layers
         self.conv_block = nn.Sequential(*layers)
 
-    def forward(self, input):
+    def forward(self, input_):
         '''
         Forward propagation
 
         :param input: input images, a tensor of size (N, in_channels, w, h)
         :return: output images, a tensor of size (N, out_channels, w, h)
         '''
-        output = self.conv_block(input) #(N, out_channels, w, h)
+        output = self.conv_block(input_) #(N, out_channels, w, h)
         return output
 
 class SubPixelConvolutionalBlock(nn.Module):
@@ -185,15 +185,11 @@ class SRResNet(nn.Module):
         output = self.subpixel_convolutional_blocks(output) # (N, n_channels, w * scaling factor, h * scaling factor)
         sr_imgs = self.conv_block3(output) # (N, 1, w * scaling factor, h * scaling factor)
         sr_imgs = self.sigmoid(sr_imgs)
-        #sr_imgs = sr_imgs.round() # reduce to image containing only 1 and 0
         return sr_imgs
 
     def get_device(self):
         """Return gpu if available, else cpu"""
         if torch.cuda.is_available():
-        #    print('GPU available')
             return 'cuda:0'
-        #else:
-        #    print('running on CPU')
-        #    return 'cpu'
-        return 'cpu'
+        else:
+            return 'cpu'

@@ -261,17 +261,27 @@ class PredictPatchTask(EOTask):
     https://eo-learn.readthedocs.io/en/latest/examples/land-cover-map/SI_LULC_pipeline.html#6.-Model-construction-and-training
     Task to make model predictions on a patch. Provide the model 
     """
-    def __init__(self, model, features_feature):
+    def __init__(self, model, features_feature, input_channels, indices):
         self.model = model
         self.features_feature = features_feature
-
+        self.input_channels = input_channels
+        self.indices = indices
     def execute(self, eopatch):
         print(' --- !! debug mode !! --- ')
         pred_eopatch = EOPatch(bbox=eopatch.bbox)
         # TODO apply the model here
         # TODO repeat the preprocessing from EODataset
-        x = eopatch.data['NDVI'][0]
-        x = torch.tensor(x.astype(np.float32))
+        tidx = 0
+        x = []
+        for b in range(self.input_channels-1):
+            xx = eopatch.data['BANDS'][tidx][:, :, b+1]
+            x.append(xx.astype(np.float32).squeeze())
+        for index in self.indices:
+            xx = eopatch.data[index][tidx]
+            x.append(xx.astype(np.float32).squeeze())
+
+        #x = eopatch.data['NDVI'][0]
+        x = torch.tensor(np.stack(x).astype(np.float32))
         with torch.no_grad():
             prediction = self.model(x)
         # reshape to expected output shape

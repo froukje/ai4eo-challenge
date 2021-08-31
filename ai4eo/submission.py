@@ -85,7 +85,7 @@ def main(args):
     model_state = torch.load(args.trained_model)
     eomodel = SRResNet(args)#model.EOModel(args)
     eomodel.load_state_dict(model_state)
-    predict_task = eotasks.PredictPatchTask(eomodel, (FeatureType.DATA, 'BANDS'))
+    predict_task = eotasks.PredictPatchTask(eomodel, (FeatureType.DATA, 'BANDS'), args.input_channels, args.indices)
 
     # EXPORT PREDICTION AS TIFF - copied from starter notebook
     # Export the predicted binary mask as tiff for submission
@@ -156,6 +156,7 @@ if __name__=='__main__':
     parser.add_argument('--scaling_factor', type=int, default=4)
     parser.add_argument('--n_channels', type=int, default=64)
     parser.add_argument('--input_channels', type=int, default=3)
+    parser.add_argument('--indices', type=str, nargs='*', default=['NDVI'], choices=["NDVI", "NDWI", "NDBI"])
     parser.add_argument('--large_kernel_size', type=int, default=9)
     parser.add_argument('--small_kernel_size', type=int, default=3)
     parser.add_argument('--n_blocks', type=int, default=16)

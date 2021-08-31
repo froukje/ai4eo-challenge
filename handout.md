@@ -75,6 +75,7 @@ Login to the AI4EO challenge website and upload the `.tar.gz` folder. Shortly, t
 
 Often it will make sense to submit training the model as a slurm job, rather than running an interactive session. 
 
+<code>
 `#!/bin/bash`
 `#SBATCH -p amd`
 #SBATCH -A ka1176
@@ -100,3 +101,4 @@ echo "python \$gitdir/model.py --processed-data-dir /swork/shared_data/2021-ai4e
 
 # execute the singularity container
 singularity exec --nv --bind /scratch/k/k202141/singularity/cache:/home/jovyan/.cache --bind /mnt/lustre02/work/ka1176/:/swork /work/ka1176/caroline/gitlab/ai4eo-challenge/ai4eo2_latest.sif bash $scriptdir_c/singularity_run.sh
+</code>

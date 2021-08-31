@@ -73,7 +73,7 @@ Login to the AI4EO challenge website and upload the `.tar.gz` folder. Shortly, t
 
 ## Alternative: submit the job
 
-Often it will make sense to submit training the model as a slurm job, rather than running an interactive session. 
+Often it will make sense to submit training the model as a slurm job, rather than running an interactive session. Below is a demo script for such a submission. Change the variables `gitdir_c`, `scriptdir_c` for your corresponding paths, and adapt the arguments to `model.py` as needed.
 
 ```bash
 #!/bin/bash
@@ -81,7 +81,7 @@ Often it will make sense to submit training the model as a slurm job, rather tha
 #SBATCH -A ka1176
 #SBATCH --mem=0
 #SBATCH --exclusive
-#SBATCH --time=48:00:00
+#SBATCH --time=08:00:00
 
 hostname
 

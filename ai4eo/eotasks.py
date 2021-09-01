@@ -32,7 +32,6 @@ from skimage import measure
 from skimage.morphology import binary_dilation, disk
 
 import torch
-from model import EODataset
 
 class SamplePatchletsTask(EOTask):
     '''
@@ -272,8 +271,6 @@ class PredictPatchTask(EOTask):
         pred_eopatch = EOPatch(bbox=eopatch.bbox)
         # TODO apply the model here
         # TODO repeat the preprocessing from EODataset
-        #x = eopatch.data['NDVI'][0]
-        #x = torch.tensor(np.stack(x).astype(np.float32))
       
         tidx = 0
         x = []
@@ -287,21 +284,15 @@ class PredictPatchTask(EOTask):
         x = np.expand_dims(np.stack(x), axis=0)
         x = torch.tensor(x.astype(np.float32))
 
-        #pred_dataset = EODataset('valid', self.args)
-        #pred_loader = DataLoader(pred_dataset, batch_size=args.batch_size)
-        #for idx, (inputs, target, weight) in enumerate(pred_loader):
-        #    with torch.no_grad():
-        #        prediction = self.model(x)
         with torch.no_grad():
             prediction = self.model(x)
         # reshape to expected output shape
         prediction = prediction.numpy().squeeze()
         prediction = prediction[:, :, np.newaxis]
         # cast to bool 
-        prediction = np.round(prediction)
-        prediction = prediction.astype(np.bool)
+        prediction = np.round(prediction).astype(np.uint8)
+        #prediction = prediction.astype(np.bool)
         pred_eopatch[(FeatureType.MASK_TIMELESS, 'PREDICTION')] = prediction
         print(pred_eopatch)
         return pred_eopatch
 
-        return eopatch

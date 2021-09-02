@@ -56,8 +56,11 @@ class EODataset(Dataset):
 
         if flag=='train':
             f_patches = f_patches[args.n_valid_patches:]
-        else:
+        elif flag=='valid':
             f_patches = f_patches[:args.n_valid_patches]
+            print('EOPatches used for validation:', f_patches)
+        else:
+            raise ValueError("not implemented: ", flag)
 
         # load patches
         eo_load = LoadTask(path=args.processed_data_dir)
@@ -87,8 +90,8 @@ class EODataset(Dataset):
         print(f'creating {len(small_patches)} small patches from {len(large_patches)} patches in {time.time()-start_time:.1f} seconds')
 
         # subsample time frame TODO
-        tidx = 0
-        print(f'selecting the very first time stamp')
+        tidx = [0, -1]
+        print(f'selecting the first and the last time stamp')
 
         # subsample bands and other channels
         print('-- selecting bands --')
@@ -107,15 +110,17 @@ class EODataset(Dataset):
         for patch in small_patches:
             x = []
             for b in range(args.input_channels-1):
-                xx = patch.data['BANDS'][tidx][:, :, b+1]
-                x.append(xx.astype(np.float32).squeeze())
+                for ix in tidx:
+                    xx = patch.data['BANDS'][ix][:, :, b+1]
+                    x.append(xx.astype(np.float32).squeeze())
             #for band in args.bands:
             #    band_ix = band_names.index(band)
             #    xx = patch.data['BANDS'][tidx][:, :, band_ix]
             #    x.append(xx.astype(np.float32))
             for index in args.indices:
-                xx = patch.data[index][tidx]
-                x.append(xx.astype(np.float32).squeeze())
+                for ix in tidx:
+                    xx = patch.data[index][ix]
+                    x.append(xx.astype(np.float32).squeeze())
 
             lowres.append(np.array(x))
             y = patch.mask_timeless['CULTIVATED']
@@ -123,6 +128,8 @@ class EODataset(Dataset):
             y = y.swapaxes(1,2)
             target.append(y.astype(np.float32))
             w = patch.data_timeless['WEIGHTS']
+            w = w.swapaxes(0,2)
+            w = w.swapaxes(1,2)
             weight.append(w.astype(np.float32))
 
         # BANDS: time_idx * S * S * band_idx
@@ -219,6 +226,8 @@ def main(args):
     valid_loader = DataLoader(valid_dataset, batch_size=args.batch_size)
     # instantiate the model
     #model = EOModel(args, len(args.bands)+len(args.indices))
+    print('!!! manually account for tidx = [0,-1]!!!')
+    args.input_channels = 2*args.input_channels
     model = SRResNet(args)
     if torch.cuda.is_available():
         model = model.cuda()
@@ -270,8 +279,8 @@ def main(args):
         #print(preds.shape)
         #print(targets.shape)
         print(f'Validation took {(time.time() - start_time) / 60:.2f} minutes, valid_loss: {valid_loss:.4f}')
-        cast_preds = (preds > 0.5).astype(np.float32) # sigmoid --> binary
-        mcc = calc_evaluation_metric(targets, cast_preds, weights)
+        #cast_preds = (preds > 0.5).astype(np.float32) # sigmoid --> binary
+        #mcc = calc_evaluation_metric(targets, cast_preds, weights)
         # nni
         if args.nni:
             #nni.report_intermediate_result(valid_loss)
@@ -310,8 +319,10 @@ def calc_evaluation_metric(target, pred, weight):
     '''
     calculate evaluation metric MCC as given in the task
     '''
+    start_time = time.time()
     MCC = matthews_corrcoef(target.flatten(), pred.flatten(), sample_weight=weight.flatten())
     print(f'evaluation metric MCC: {MCC:.4f}')
+    print(f'{time.time() - start_time:.2f} seconds')
     return MCC
 
 

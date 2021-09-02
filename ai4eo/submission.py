@@ -93,6 +93,8 @@ def main(args):
     export_task = ExportToTiff(feature=(FeatureType.MASK_TIMELESS, 'PREDICTION'),
                           folder=args.target_dir, crs='epsg:32633', image_dtype=np.uint8, no_data_value=255)
 
+    save_task = SaveTask(path=args.target_dir, overwrite_permission=True)
+
     # construct the graph
     workflow = LinearWorkflow(load_task,
                               compute_reflectances,
@@ -103,7 +105,8 @@ def main(args):
                               add_valid_count,
                               filter_task,
                               predict_task,
-                              export_task
+                              save_task,
+                              #export_task
                               )
 
     # --------------------
@@ -122,6 +125,7 @@ def main(args):
     for eop_test in eops_test:
         eop_exec_args = {
                 load_task:   {'eopatch_folder': f'test/{eop_test}'},
+                save_task:   {'eopatch_folder': f'highres_{eop_test}'},
                 export_task: {'filename': f'{eop_test}.tif'}
                         }
                                 

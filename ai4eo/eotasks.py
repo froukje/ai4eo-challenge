@@ -293,6 +293,5 @@ class PredictPatchTask(EOTask):
         prediction = np.round(prediction).astype(np.uint8)
         #prediction = prediction.astype(np.bool)
         pred_eopatch[(FeatureType.MASK_TIMELESS, 'PREDICTION')] = prediction
-        print(pred_eopatch)
         return pred_eopatch
 

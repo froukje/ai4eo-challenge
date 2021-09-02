@@ -17,7 +17,7 @@ As explained in the documentation, it is not possible to directly create the ima
 
 You now have a local docker image. To transfer it to mistral, I used dockerhub: `hub.docker.com`. Register a user account (`$USER_DOCKERHUB`) and do the following:
 
-1. `sudo docker tag ai4eo2 $USER_DOCKERHUB/ai4eo2` 
+1. `sudo docker tag ai4eo $USER_DOCKERHUB/ai4eo` 
 2. `sudo docker push $USER_DOCKERHUB/ai4eo`
 
 Login to mistral. Checkout the git repository there as well:

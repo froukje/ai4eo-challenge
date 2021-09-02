@@ -90,7 +90,7 @@ class EODataset(Dataset):
         print(f'creating {len(small_patches)} small patches from {len(large_patches)} patches in {time.time()-start_time:.1f} seconds')
 
         # subsample time frame TODO
-        tidx = [0, -1]
+        tidx = [0] #, -1]
         print(f'selecting the first and the last time stamp')
 
         # subsample bands and other channels
@@ -226,8 +226,8 @@ def main(args):
     valid_loader = DataLoader(valid_dataset, batch_size=args.batch_size)
     # instantiate the model
     #model = EOModel(args, len(args.bands)+len(args.indices))
-    print('!!! manually account for tidx = [0,-1]!!!')
-    args.input_channels = 2*args.input_channels
+    #print('!!! manually account for tidx = [0,-1]!!!')
+    #args.input_channels = 2*args.input_channels
     model = SRResNet(args)
     if torch.cuda.is_available():
         model = model.cuda()

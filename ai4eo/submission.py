@@ -105,8 +105,8 @@ def main(args):
                               add_valid_count,
                               filter_task,
                               predict_task,
-                              save_task,
-                              #export_task
+                              #save_task,
+                              export_task
                               )
 
     # --------------------

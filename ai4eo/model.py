@@ -293,7 +293,7 @@ def main(args):
     mcc_final = calc_evaluation_metric(targets.flatten(), cast_best_preds.flatten(), weights.flatten())
     if args.nni:
         #nni.report_final_result(best_valid_loss)
-        nn.report_final_result(mcc_final)
+        nni.report_final_result(mcc_final)
     # save best model and TODO predictions to disk
     save_model_path = os.path.join(args.target_dir, 'best_model.pt')
     torch.save(best_model.state_dict(), save_model_path)
@@ -316,15 +316,15 @@ def calc_evaluation_metric(target, pred, weight):
 
 
 def add_nni_params(args):
-    args_nni = nni.get_next_paramteter()
-    assert all([key in args for key in ars_nni.keys()]), 'need only valid parameters'
+    args_nni = nni.get_next_parameter()
+    assert all([key in args for key in args_nni.keys()]), 'need only valid parameters'
     args_dict = vars(args)
     # cast params that should be int to int if needed (nni may offer them as float)
     args_nni_casted = {key:(int(value) if type(args_dict[key]) is int else value) for key, value in args_nni.items()}
     args_dict.update(args_nni_casted)
     # adjust paths of model and prediction outputs so they get saved together with the other outputs
     nni_output_dir = os.path.expandvars('$NNI_OUTPUT_DIR')
-    for param in ['save_model_path', 'target_dir']:
+    for param in ['target_dir']:
         nni_path = os.path.join(nni_output_dir, os.path.basename(args_dict[param]))
         args_dict[param] = nni_path
     return args

@@ -106,9 +106,6 @@ class EODataset(Dataset):
         
         for patch in small_patches:
             x = []
-            #for b in range(args.input_channels-1):
-            #    xx = patch.data['BANDS'][tidx][:, :, b+1]
-            #    x.append(xx.astype(np.float32).squeeze())
             for band in args.bands:
                 band_ix = band_names.index(band)
                 xx = patch.data['BANDS'][tidx][:, :, band_ix]

@@ -176,6 +176,15 @@ class ValidDataFractionPredicate:
         coverage = np.sum(array.astype(np.uint8)) / np.prod(array.shape)
         return coverage > self.threshold
 
+class NanDataPredicate:
+    """ Predicate that defines if a frame from EOPatch's time-series contains nans --> invalid """
+    def __init__(self):
+        pass
+
+    def __call__(self, array):
+        nancount = np.sum(np.isnan(array))
+        return nancount==0
+
 def weighting_function(pix_size: int, median_pix_size: int, highest_weight_pix_size: int = 35,
                        skewness: int = 15) -> float:
     """ Creates weight to be applied to a parcel depending on its number of pixels (after pixelation) """

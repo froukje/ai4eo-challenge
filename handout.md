@@ -102,3 +102,40 @@ echo "python \$gitdir/model.py --processed-data-dir /swork/shared_data/2021-ai4e
 # execute the singularity container
 singularity exec --nv --bind /scratch/k/k202141/singularity/cache:/home/jovyan/.cache --bind /mnt/lustre02/work/ka1176/:/swork /work/ka1176/caroline/gitlab/ai4eo-challenge/ai4eo2_latest.sif bash $scriptdir_c/singularity_run.sh
 ```
+
+## Submit a NNI job
+
+Analogue to the previous script.
+Below is a demo script for a submission using NNI. Change the variables `gitdir_c`, `scriptdir_c` for your corresponding paths, and adapt the arguments to `model.py` as needed.
+
+```bash
+#!/bin/bash
+#SBATCH --partition=amd        # Specify partition name
+#SBATCH --nodes=1              # Specify number of nodes
+#SBATCH --mem=0                # Use entire memory of node
+#SBATCH --exclusive            # Do not share node
+#SBATCH --time=12:00:00        # Set a limit on the total run time
+#SBATCH --mail-type=FAIL       # Notify user by email in case of job failure
+#SBATCH --account=k20200
+
+hostname
+
+module load /sw/spack-amd/spack/modules/linux-centos8-zen2/singularity/3.7.0-gcc-10.2.0
+
+gitdir_c=/swork/frauke/ai4eo-challenge/nni  # gitlab dir (change this to gitlab directory as it would appear in the container)
+scriptdir_c=/swork/frauke/ai4eo-challenge/jobs # script dir (change this to current directory as it would appear in the container)
+
+
+echo "echo 'HELLO BOX'" > singularity_run_nni.sh
+echo "gitdir=$gitdir_c" >> singularity_run_nni.sh
+echo ". '/opt/conda/etc/profile.d/conda.sh'" >> singularity_run_nni.sh
+echo "conda activate eurodatacube-gpu-" >> singularity_run_nni.sh
+echo "echo \$gitdir" >> singularity_run_nni.sh
+echo "port=$((8080 + $RANDOM % 10000))" >> singularity_run_nni.sh
+echo "nnictl create -c \$gitdir/config.yml --port \$port|| nnictl create -c \$gitdir/config.yml --port \$port|| nnictl create -c \$gitdir/config.yml --port \$port|| nnictl create -c \$gitdir/config.yml --port \$port" >> singularity_run_nni.sh
+echo "sleep 11h 50m" >> singularity_run_nni.sh
+echo "nnictl stop" >> singularity_run_nni.sh
+
+# execute the singularity container
+singularity exec --nv --bind /scratch/k/k202143/singularity/cache:/home/jovyan/.cache --bind /mnt/lustre02/work/ka1176/frauke/ai4eo-challenge/nni/:/opt/conda/envs/eurodatacube-gpu-/nni --bind /mnt/lustre02/work/ka1176/:/swork /work/ka1176/caroline/gitlab/ai4eo-challenge/ai4eo2_latest.sif bash $scriptdir_c/singularity_run_nni.sh
+```

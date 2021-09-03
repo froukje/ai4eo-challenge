@@ -261,28 +261,37 @@ class PredictPatchTask(EOTask):
     https://eo-learn.readthedocs.io/en/latest/examples/land-cover-map/SI_LULC_pipeline.html#6.-Model-construction-and-training
     Task to make model predictions on a patch. Provide the model 
     """
-    def __init__(self, model, features_feature):
+    def __init__(self, model, features_feature, args):
         self.model = model
         self.features_feature = features_feature
-
+        self.args = args
+    
     def execute(self, eopatch):
         print(' --- !! debug mode !! --- ')
         pred_eopatch = EOPatch(bbox=eopatch.bbox)
         # TODO apply the model here
         # TODO repeat the preprocessing from EODataset
-        x = eopatch.data['NDVI'][0]
+      
+        tidx = 0
+        x = []
+        for b in range(self.args.input_channels-1):
+            xx = eopatch.data['BANDS'][tidx][:, :, b+1]
+            x.append(xx.astype(np.float32).squeeze())
+        for index in self.args.indices:
+            xx = eopatch.data[index][tidx]
+            x.append(xx.astype(np.float32).squeeze())
+
+        x = np.expand_dims(np.stack(x), axis=0)
         x = torch.tensor(x.astype(np.float32))
+
         with torch.no_grad():
             prediction = self.model(x)
         # reshape to expected output shape
         prediction = prediction.numpy().squeeze()
         prediction = prediction[:, :, np.newaxis]
-        # cast to bool TODO
-        print(' --- !! manually casting to bool, replace with model output layer !! ---')
-        prediction = prediction > 0
-        prediction = prediction.astype(np.bool)
+        # cast to bool 
+        prediction = np.round(prediction).astype(np.uint8)
+        #prediction = prediction.astype(np.bool)
         pred_eopatch[(FeatureType.MASK_TIMELESS, 'PREDICTION')] = prediction
-        print(pred_eopatch)
         return pred_eopatch
 
-        return eopatch

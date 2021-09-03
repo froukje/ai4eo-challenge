@@ -92,8 +92,10 @@ class EODataset(Dataset):
 
         # subsample bands and other channels
         print('-- selecting bands --')
-        for band in args.bands:
-            print(f'  {band}')
+        #for band in args.bands:
+        #    print(f'  {band}')
+        if args.input_channels > 1:
+            print(f' {band_names[:args.input_channels-1]}')
         print('-- selecting normalized indices --')
         for index in args.indices:
             print(f'  {index}')
@@ -104,10 +106,13 @@ class EODataset(Dataset):
 
         for patch in small_patches:
             x = []
-            for band in args.bands:
-                band_ix = band_names.index(band)
-                xx = patch.data['BANDS'][tidx][:, :, band_ix]
-                x.append(xx.astype(np.float32))
+            for b in range(args.input_channels-1):
+                xx = patch.data['BANDS'][tidx][:, :, b+1]
+                x.append(xx.astype(np.float32).squeeze())
+            #for band in args.bands:
+            #    band_ix = band_names.index(band)
+            #    xx = patch.data['BANDS'][tidx][:, :, band_ix]
+            #    x.append(xx.astype(np.float32))
             for index in args.indices:
                 xx = patch.data[index][tidx]
                 x.append(xx.astype(np.float32).squeeze())
@@ -170,10 +175,9 @@ def main(args):
         values as numpy arrays."""
 
         device = model.get_device()
-        print(device)
-
         inputs = inputs.to(device)
         target = target.to(device)
+        weight = weight.to(device)
 
         if eval_:
             with torch.no_grad():
@@ -187,19 +191,12 @@ def main(args):
         else:
             pred_values = pred.detach().numpy()
 
-        # TODO pred / target dimension
-        # TODO masking should be done in the network output layer
-        #pred = torch.reshape(pred, (len(inputs), -1)) > 0
-        #target = torch.reshape(target, (len(inputs), -1)) > 0
-        #weight = torch.reshape(weight, (len(inputs), -1))
-        # to cpu for sklearn (inefficient)
-        #target = target.cpu().flatten()
-        #pred = pred.cpu().flatten()
-        #weight = weight.cpu().flatten()
-
-        # use mse loss
-        criterion = nn.MSELoss()
-        loss = criterion(pred, target)
+        # use weighted cross entropy loss with two classes
+        S = target.shape[-1]
+        target = target.reshape((-1, S*S))
+        pred   = pred.reshape((-1, S*S))
+        weight = weight.reshape((-1, S*S))
+        loss = F.binary_cross_entropy(pred, target, weight=weight)
 
         return loss, pred_values
 
@@ -234,6 +231,9 @@ def main(args):
     best_loss = np.inf
     best_epoch = 0
     patience_count = 0
+    # history
+    all_train_losses = []
+    all_valid_losses = []
 
     for epoch in range(args.max_epochs):
         # train
@@ -250,23 +250,28 @@ def main(args):
             if args.debug:
                 break
         train_loss = np.mean(np.array(train_losses))
+        all_train_losses.append(train_loss)
         print(f'Training took {(time.time() - start_time) / 60:.2f} minutes, train_loss: {train_loss:.4f}')
         start_time = time.time()
         # validation
         model = model.eval()
-        valid_losses, preds ,targets = [], [], []
+        valid_losses, preds ,targets, weights = [], [], [], []
         for idx, (inputs, target, weight) in enumerate(valid_loader):
             loss, pred = predict(inputs, target, weight, model, eval_=True)
             valid_losses.append(loss.detach().cpu().numpy())
             preds.append(pred)
             targets.append(target)
+            weights.append(weight)
         valid_loss = np.mean(np.array(valid_losses))
+        all_valid_losses.append(valid_loss)
         preds = np.concatenate(preds, axis=0)
         targets = np.concatenate(targets, axis=0)
-        print(preds.shape)
-        print(targets.shape)
+        weights = np.concatenate(weights, axis=0)
+        #print(preds.shape)
+        #print(targets.shape)
         print(f'Validation took {(time.time() - start_time) / 60:.2f} minutes, valid_loss: {valid_loss:.4f}')
-        mcc = calc_evaluation_metric(targets, preds)
+        cast_preds = (preds > 0.5).astype(np.float32) # sigmoid --> binary
+        mcc = calc_evaluation_metric(targets, cast_preds, weights)
         # nni
         if args.nni:
             #nni.report_intermediate_result(valid_loss)
@@ -275,7 +280,9 @@ def main(args):
         if valid_loss < best_loss:
             best_model = copy.deepcopy(model)
             best_preds = preds
+            cast_best_preds = (best_preds > 0.5).astype(np.float32)
             best_loss = valid_loss
+            mcc = calc_evaluation_metric(targets, cast_best_preds, weights)
             patience_count = 0
         else:
             patience_count += 1
@@ -283,47 +290,41 @@ def main(args):
         if patience_count == args.patience:
             print(f'no improvement for {args.patience} epochs, early stopping')
             break
-    mcc_final = calc_evaluation_metric(targets, np.stack(best_preds))
+    mcc_final = calc_evaluation_metric(targets.flatten(), cast_best_preds.flatten(), weights.flatten())
     if args.nni:
         #nni.report_final_result(best_valid_loss)
-        nn.report_final_result(mcc_final)
-    # TODO save best model and predictions to disk
+        nni.report_final_result(mcc_final)
+    # save best model and TODO predictions to disk
     save_model_path = os.path.join(args.target_dir, 'best_model.pt')
     torch.save(best_model.state_dict(), save_model_path)
     print(f'saved best model to {save_model_path}')
+    # save training history
+    with open(os.path.join(args.target_dir, 'train_losses.txt'), 'w') as f:
+        for tl in all_train_losses:
+            f.write(f'{tl:.4f}\n')
+    with open(os.path.join(args.target_dir, 'valid_losses.txt'), 'w') as f:
+        for vl in all_valid_losses:
+            f.write(f'{vl:.4f}\n')
 
-def calc_evaluation_metric(target, pred):
+def calc_evaluation_metric(target, pred, weight):
     '''
     calculate evaluation metric MCC as given in the task
     '''
-    true_ones = (target == 1)
-    true_zeros = ~true_ones
-    pred_ones = (pred.round() == 1)
-    pred_zeros = ~pred_ones
-
-    TP = float(np.count_nonzero(np.logical_and(pred_ones, true_ones)))
-    FN = float(np.count_nonzero(np.logical_and(pred_zeros, true_ones)))
-    FP = float(np.count_nonzero(np.logical_and(pred_ones, true_zeros)))
-    TN = float(np.count_nonzero(np.logical_and(pred_zeros, true_zeros)))
-    print(f'TP: {TP}')
-    print(f'FN: {FN}')
-    print(f'FP: {FP}')
-    print(f'TN: {TN}')
-    MCC = (TP * TN - FP * FN) / np.sqrt((TP + FP) * (TP + FN) * (TN + FP) * (TN + FN))
-    print(f'evaluation metric MCC: {MCC}')
+    MCC = matthews_corrcoef(target.flatten(), pred.flatten(), sample_weight=weight.flatten())
+    print(f'evaluation metric MCC: {MCC:.4f}')
     return MCC
 
 
 def add_nni_params(args):
-    args_nni = nni.get_next_paramteter()
-    assert all([key in args for key in ars_nni.keys()]), 'need only valid parameters'
+    args_nni = nni.get_next_parameter()
+    assert all([key in args for key in args_nni.keys()]), 'need only valid parameters'
     args_dict = vars(args)
     # cast params that should be int to int if needed (nni may offer them as float)
     args_nni_casted = {key:(int(value) if type(args_dict[key]) is int else value) for key, value in args_nni.items()}
     args_dict.update(args_nni_casted)
     # adjust paths of model and prediction outputs so they get saved together with the other outputs
     nni_output_dir = os.path.expandvars('$NNI_OUTPUT_DIR')
-    for param in ['save_model_path', 'target_dir']:
+    for param in ['target_dir']:
         nni_path = os.path.join(nni_output_dir, os.path.basename(args_dict[param]))
         args_dict[param] = nni_path
     return args
@@ -332,9 +333,6 @@ if __name__=='__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--processed-data-dir', type=str, default='/work/shared_data/2021-ai4eo/dev_data/default/')
     parser.add_argument('--target-dir', type=str, default='.')
-    parser.add_argument('--save model-path', type=str, default='saved_models') 
-    parser.add_argument('--n-processes', type=int, default=4, help='Processes for EOExecutor')
-    parser.add_argument('--overwrite', action='store_true', help='Overwrite the output files')
     parser.add_argument('--fixed-random-seed', action='store_true', default=True, help='fixed random seed numpy / torch') 
     parser.add_argument('--inference', action='store_true', default=False, help='run test set inference')
     parser.add_argument('--nni', action='store_true', default=False)
@@ -346,9 +344,9 @@ if __name__=='__main__':
     parser.add_argument('--s2-random', action='store_true', 
                         help='Randomly select overlapping patches (else: systematically select non overlapping patches')
     parser.add_argument('--n-s2', type=int, default=10, help='number of EOPatches to subsample')
-    parser.add_argument('--bands', type=str, nargs='*', default=[],
-                        choices=["B01","B02","B03","B04","B05","B06","B07","B08","B8A","B09","B11","B12"], # from starter notebook
-                        help='Sentinel band names (--> starter notebook')
+    #parser.add_argument('--bands', type=str, nargs='*', default=[],
+    #                    choices=["B01","B02","B03","B04","B05","B06","B07","B08","B8A","B09","B11","B12"], # from starter notebook
+    #                    help='Sentinel band names (--> starter notebook')
     parser.add_argument('--indices', type=str, nargs='*', default=['NDVI'], choices=["NDVI", "NDWI", "NDBI"])
     # network and training hyperparameters
     parser.add_argument('--learning-rate', type=float, default=1e-3)
@@ -360,6 +358,7 @@ if __name__=='__main__':
     parser.add_argument('--scaling_factor', type=int, default=4)
     # number of channels in-between, i.e. the input and output channels for the residual and subpixel convolutional blocks
     parser.add_argument('--n_channels', type=int, default=64)
+    # nr of input channels: 1: no bands, >1 bands B01, B02, etc included
     parser.add_argument('--input_channels', type=int, default=3)  # number of input channels, default for RGB image: 3
     # kernel size of the first and last convolutions which transform the inputs and outputs
     parser.add_argument('--large_kernel_size', type=int, default=9)
@@ -372,7 +371,7 @@ if __name__=='__main__':
     if args.nni:
         args = add_nni_params(args)
 
-    assert(args.input_channels == (len(args.bands) + 1)), "nr of input channels needs to be one more than nr of bands!"  
+    #assert(args.input_channels == (len(args.bands) + 1)), "nr of input channels needs to be one more than nr of bands!"  
 
     print('\n*** begin args key / value ***')
     for key, value in vars(args).items():

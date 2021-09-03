@@ -85,13 +85,15 @@ def main(args):
     model_state = torch.load(args.trained_model)
     eomodel = SRResNet(args)#model.EOModel(args)
     eomodel.load_state_dict(model_state)
-    predict_task = eotasks.PredictPatchTask(eomodel, (FeatureType.DATA, 'BANDS'))
-
+    predict_task = eotasks.PredictPatchTask(eomodel, (FeatureType.DATA, 'BANDS'), args)
+        
     # EXPORT PREDICTION AS TIFF - copied from starter notebook
     # Export the predicted binary mask as tiff for submission
     # NOTE: make sure both 0s and 1s are correctly exported
     export_task = ExportToTiff(feature=(FeatureType.MASK_TIMELESS, 'PREDICTION'),
                           folder=args.target_dir, crs='epsg:32633', image_dtype=np.uint8, no_data_value=255)
+
+    save_task = SaveTask(path=args.target_dir, overwrite_permission=True)
 
     # construct the graph
     workflow = LinearWorkflow(load_task,
@@ -103,6 +105,7 @@ def main(args):
                               add_valid_count,
                               filter_task,
                               predict_task,
+                              #save_task,
                               export_task
                               )
 
@@ -122,6 +125,7 @@ def main(args):
     for eop_test in eops_test:
         eop_exec_args = {
                 load_task:   {'eopatch_folder': f'test/{eop_test}'},
+                save_task:   {'eopatch_folder': f'highres_{eop_test}'},
                 export_task: {'filename': f'{eop_test}.tif'}
                         }
                                 
@@ -142,6 +146,7 @@ def main(args):
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser()
+    parser.add_argument('--fixed-random-seed', action='store_true', default=True, help='fixed random seed numpy / torch')
     parser.add_argument('--trained-model', type=str, default='best_model.pt')
     parser.add_argument('--raw-data-dir', type=str, default='/work/shared_data/2021-ai4eo/eopatches/')
     parser.add_argument('--target-dir', type=str, default='/work/shared_data/2021-ai4eo/submission/')
@@ -150,18 +155,19 @@ if __name__=='__main__':
     #parser.add_argument('--n-time-frames', type=int, default=1, help='Number of time frames in EOPatches')
     parser.add_argument('--overwrite', action='store_true', help='Overwrite the output files')
     # need to pass model specific arguments ehre
+    parser.add_argument('--n-valid-patches', type=int, default=10, help='Number of EOPatches selected for validation')
     parser.add_argument('--filters', type=int, default=8)
     parser.add_argument('--s2-length', type=int, default=500, help='do not change this')
     parser.add_argument('--batch-size', type=int, default=1, help='do not change this')
     parser.add_argument('--scaling_factor', type=int, default=4)
     parser.add_argument('--n_channels', type=int, default=64)
     parser.add_argument('--input_channels', type=int, default=3)
-    parser.add_argument('--bands', type=str, nargs='*', default=[],
-                        choices=["B01","B02","B03","B04","B05","B06","B07","B08","B8A","B09","B11","B12"], # from starter notebook
-                        help='Sentinel band names (--> starter notebook')
+    parser.add_argument('--indices', type=str, nargs='*', default=['NDVI'], choices=["NDVI", "NDWI", "NDBI"])
     parser.add_argument('--large_kernel_size', type=int, default=9)
     parser.add_argument('--small_kernel_size', type=int, default=3)
     parser.add_argument('--n_blocks', type=int, default=16)
+    parser.add_argument('--learning-rate', type=float, default=1e-3)
+    parser.add_argument('--max-epochs', type=float, default=1e-3)
     args = parser.parse_args()
 
     print('\n*** begin args key / value ***')

@@ -83,15 +83,19 @@ class EODataset(Dataset):
 
         start_time = time.time()
 
+        min_patches = 100
+
         for patch in large_patches:
+            min_patches = min(len(patch.data['BANDS']), min_patches)
             sp = eo_sample.execute(patch)
             small_patches.extend(sp)
 
         print(f'creating {len(small_patches)} small patches from {len(large_patches)} patches in {time.time()-start_time:.1f} seconds')
+        print(f'minimum time frames: {min_patches}')
 
         # subsample time frame TODO
-        tidx = [0] #, -1]
-        print(f'selecting the first and the last time stamp')
+        tidx = list(range(args.n_time_frames//2)) + list(range(-1*(args.n_time_frames//2), 0))
+        print(f'selecting the first N//2 and the last N//2 time stamps: {tidx}')
 
         # subsample bands and other channels
         print('-- selecting bands --')
@@ -109,16 +113,11 @@ class EODataset(Dataset):
 
         for patch in small_patches:
             x = []
-            for b in range(args.input_channels-1):
-                for ix in tidx:
+            for ix in tidx: # outer most group: time index
+                for b in range(args.input_channels-1):
                     xx = patch.data['BANDS'][ix][:, :, b+1]
                     x.append(xx.astype(np.float32).squeeze())
-            #for band in args.bands:
-            #    band_ix = band_names.index(band)
-            #    xx = patch.data['BANDS'][tidx][:, :, band_ix]
-            #    x.append(xx.astype(np.float32))
-            for index in args.indices:
-                for ix in tidx:
+                for index in args.indices:
                     xx = patch.data[index][ix]
                     x.append(xx.astype(np.float32).squeeze())
 
@@ -212,8 +211,6 @@ def main(args):
         np.random.seed(2021)
         torch.manual_seed(1407)
 
-    assert args.n_time_frames==1, print(f'Not implemented: n_time_frame={args.n_time_frames}')
-
     if args.inference:
         print('not implemented: inference')
         return
@@ -225,9 +222,9 @@ def main(args):
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
     valid_loader = DataLoader(valid_dataset, batch_size=args.batch_size)
     # instantiate the model
-    #model = EOModel(args, len(args.bands)+len(args.indices))
-    #print('!!! manually account for tidx = [0,-1]!!!')
-    #args.input_channels = 2*args.input_channels
+    print('!!! until the band argument issue is resolved, manually account for time frames !!!')
+    print('!!! args.input_channels = args.n_time_frames * args.input_channels !!!')
+    args.input_channels = args.n_time_frames*args.input_channels
     model = SRResNet(args)
     if torch.cuda.is_available():
         model = model.cuda()

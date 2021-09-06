@@ -40,6 +40,13 @@ from srresnet_ai4eo import ConvolutionalBlock, SubPixelConvolutionalBlock, Resid
 def main(args):
 
     # --------------------
+    # INPUT CHECK
+    # --------------------
+
+    assert args.s2_length==500
+    assert args.batch_size==1
+
+    # --------------------
     # USEFUL DEFINITIONS
     # --------------------
 
@@ -81,8 +88,15 @@ def main(args):
     valid_data_predicate = eotasks.ValidDataFractionPredicate(args.cloud_threshold)
     filter_task = SimpleFilterTask((FeatureType.MASK, 'IS_VALID'), valid_data_predicate)
 
+    # Filter out nans
+    nan_data_predicate = eotasks.NanDataPredicate()
+    nan_filter_task = SimpleFilterTask((FeatureType.DATA, 'NDVI'), nan_data_predicate)
+
     # Predict
     model_state = torch.load(args.trained_model)
+    print('!!! until the band argument issue is resolved, manually account for time frames !!!')
+    print('!!! args.input_channels = args.n_time_frames * args.input_channels * len(args.indices) !!!')
+    args.input_channels = args.n_time_frames*args.input_channels*len(args.indices)
     eomodel = SRResNet(args)#model.EOModel(args)
     eomodel.load_state_dict(model_state)
     predict_task = eotasks.PredictPatchTask(eomodel, (FeatureType.DATA, 'BANDS'), args)
@@ -104,6 +118,7 @@ def main(args):
                               add_sh_validmask,
                               add_valid_count,
                               filter_task,
+                              nan_filter_task,
                               predict_task,
                               #save_task,
                               export_task
@@ -120,11 +135,11 @@ def main(args):
     # loop all available eopatches and add each to the argument list
     execution_args = []
 
-    eops_test = sorted(os.listdir(f'{args.raw_data_dir}/test/'))
+    eops_test = sorted(os.listdir(f'{args.raw_data_dir}/{args.flag}/'))
 
     for eop_test in eops_test:
         eop_exec_args = {
-                load_task:   {'eopatch_folder': f'test/{eop_test}'},
+                load_task:   {'eopatch_folder': f'{args.flag}/{eop_test}'},
                 save_task:   {'eopatch_folder': f'highres_{eop_test}'},
                 export_task: {'filename': f'{eop_test}.tif'}
                         }
@@ -154,8 +169,10 @@ if __name__=='__main__':
     parser.add_argument('--cloud-threshold', type=float, default=0.9, help='threshold for valid data cloud mask')
     #parser.add_argument('--n-time-frames', type=int, default=1, help='Number of time frames in EOPatches')
     parser.add_argument('--overwrite', action='store_true', help='Overwrite the output files')
+    parser.add_argument('--flag', type=str, default='test', choices=["train", "test"])
     # need to pass model specific arguments ehre
     parser.add_argument('--n-valid-patches', type=int, default=10, help='Number of EOPatches selected for validation')
+    parser.add_argument('--n-time-frames', type=int, default=1, help='Number of time frames in EOPatches')
     parser.add_argument('--filters', type=int, default=8)
     parser.add_argument('--s2-length', type=int, default=500, help='do not change this')
     parser.add_argument('--batch-size', type=int, default=1, help='do not change this')

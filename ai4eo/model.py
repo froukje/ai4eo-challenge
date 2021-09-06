@@ -280,7 +280,7 @@ def main(args):
             best_model = copy.deepcopy(model)
             best_preds = preds
             cast_best_preds = (best_preds > 0.5).astype(np.float32)
-            best_loss = valid_loss
+            best_valid_loss = valid_loss
             mcc = calc_evaluation_metric(targets, cast_best_preds, weights)
             patience_count = 0
         else:
@@ -309,7 +309,13 @@ def calc_evaluation_metric(target, pred, weight):
     '''
     calculate evaluation metric MCC as given in the task
     '''
-    MCC = matthews_corrcoef(target.flatten(), pred.flatten(), sample_weight=weight.flatten())
+    b_size = target.shape[0]
+    mcc = []
+    for i in range(b_size):
+        mcc.append(matthews_corrcoef(target[i,...].flatten(), pred[i,...].flatten(), sample_weight=weight[i,...].flatten()))
+    MCC = np.stack(mcc)
+    MCC = np.mean(MCC, axis=0)
+    #MCC = matthews_corrcoef(target.flatten(), pred.flatten(), sample_weight=weight.flatten())
     print(f'evaluation metric MCC: {MCC:.4f}')
     return MCC
 

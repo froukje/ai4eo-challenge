@@ -122,7 +122,7 @@ class EODataset(Dataset):
                     x.append(xx.astype(np.float32).squeeze())
 
             y = patch.mask_timeless['CULTIVATED']
-            ytf = np.sum(y) / len(y).flatten()
+            ytf = np.sum(y) / len(y.flatten())
             print(f'Target fraction: {100*ytf:.1f} %')
             if ytf < 0.1:
                 continue
@@ -208,8 +208,7 @@ def main(args):
         target = target.reshape((-1, S*S))
         pred   = pred.reshape((-1, S*S))
         weight = weight.reshape((-1, S*S))
-        # !!! debug - do not use weights
-        loss = F.binary_cross_entropy(pred, target)#, weight=weight)
+        loss = F.binary_cross_entropy(pred, target, weight=weight)
 
         return loss, pred_values
 
@@ -324,7 +323,11 @@ def calc_evaluation_metric(target, pred, weight):
     calculate evaluation metric MCC as given in the task
     '''
     start_time = time.time()
-    MCC = matthews_corrcoef(target.flatten(), pred.flatten(), sample_weight=weight.flatten())
+    mccs = []
+    for t, p, w in zip(target, pred, weight):
+        MCC = matthews_corrcoef(t.flatten(), p.flatten(), sample_weight=w.flatten())
+        mccs.append(MCC)
+    MCC = np.mean(np.array(mccs))
     print(f'evaluation metric MCC: {MCC:.4f}')
     print(f'{time.time() - start_time:.2f} seconds')
     return MCC

@@ -121,8 +121,13 @@ class EODataset(Dataset):
                     xx = patch.data[index][ix]
                     x.append(xx.astype(np.float32).squeeze())
 
-            lowres.append(np.array(x))
             y = patch.mask_timeless['CULTIVATED']
+            ytf = np.sum(y) / len(y).flatten()
+            print(f'Target fraction: {100*ytf:.1f} %')
+            if ytf < 0.1:
+                continue
+
+            lowres.append(np.array(x))
             y = y.swapaxes(0,2)
             y = y.swapaxes(1,2)
             target.append(y.astype(np.float32))
@@ -130,6 +135,7 @@ class EODataset(Dataset):
             w = w.swapaxes(0,2)
             w = w.swapaxes(1,2)
             weight.append(w.astype(np.float32))
+
 
         # BANDS: time_idx * S * S * band_idx
 
@@ -202,7 +208,8 @@ def main(args):
         target = target.reshape((-1, S*S))
         pred   = pred.reshape((-1, S*S))
         weight = weight.reshape((-1, S*S))
-        loss = F.binary_cross_entropy(pred, target, weight=weight)
+        # !!! debug - do not use weights
+        loss = F.binary_cross_entropy(pred, target)#, weight=weight)
 
         return loss, pred_values
 
@@ -223,8 +230,8 @@ def main(args):
     valid_loader = DataLoader(valid_dataset, batch_size=args.batch_size)
     # instantiate the model
     print('!!! until the band argument issue is resolved, manually account for time frames !!!')
-    print('!!! args.input_channels = args.n_time_frames * args.input_channels !!!')
-    args.input_channels = args.n_time_frames*args.input_channels
+    print('!!! args.input_channels = args.n_time_frames * args.input_channels * len(args.indices) !!!')
+    args.input_channels = args.n_time_frames*args.input_channels*len(args.indices)
     model = SRResNet(args)
     if torch.cuda.is_available():
         model = model.cuda()

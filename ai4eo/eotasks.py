@@ -276,25 +276,35 @@ class PredictPatchTask(EOTask):
         self.args = args
     
     def execute(self, eopatch):
-        print(' --- !! debug mode !! --- ')
-        pred_eopatch = EOPatch(bbox=eopatch.bbox)
-        # TODO apply the model here
+        #pred_eopatch = EOPatch(bbox=eopatch.bbox)
         # TODO repeat the preprocessing from EODataset
       
-        tidx = 0
+        # subsample time frame TODO
+        tidx = list(range(self.args.n_time_frames//2)) + list(range(-1*(self.args.n_time_frames//2), 0))
+        print(f'selecting the first N//2 and the last N//2 time stamps: {tidx}')
+
+        print(self.args.indices)
+
         x = []
-        for b in range(self.args.input_channels-1):
-            xx = eopatch.data['BANDS'][tidx][:, :, b+1]
-            x.append(xx.astype(np.float32).squeeze())
-        for index in self.args.indices:
-            xx = eopatch.data[index][tidx]
-            x.append(xx.astype(np.float32).squeeze())
+        for ix in tidx: # outer most group: time index
+            print(f'Time index {ix}')
+            for b in range(self.args.input_channels-1):
+                print(f'Band index {b} -- skip')
+                continue
+                xx = eopatch.data['BANDS'][ix][:, :, b+1]
+                x.append(xx.astype(np.float32).squeeze())
+            for index in self.args.indices:
+                xx = eopatch.data[index][ix]
+                x.append(xx.astype(np.float32).squeeze())
+                print(f'Normalized index {index} attached')
 
         x = np.expand_dims(np.stack(x), axis=0)
         x = torch.tensor(x.astype(np.float32))
+        print('Input shape: ', x.shape)
 
         with torch.no_grad():
             prediction = self.model(x)
+        print('Output shape: ', prediction.shape)
         # reshape to expected output shape
         prediction = prediction.numpy().squeeze()
         prediction = prediction[:, :, np.newaxis]

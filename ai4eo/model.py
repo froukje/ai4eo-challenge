@@ -120,6 +120,8 @@ class EODataset(Dataset):
             y = y.swapaxes(1,2)
             target.append(y.astype(np.float32))
             w = patch.data_timeless['WEIGHTS']
+            w = w.swapaxes(0,2)
+            w = w.swapaxes(1,2)
             weight.append(w.astype(np.float32))
 
         # BANDS: time_idx * S * S * band_idx
@@ -352,14 +354,14 @@ if __name__=='__main__':
     # the scaling factor (for the Generator), the input LR images will be downsampled from the target HR images by this factor 
     parser.add_argument('--scaling_factor', type=int, default=4)
     # number of channels in-between, i.e. the input and output channels for the residual and subpixel convolutional blocks
-    parser.add_argument('--n_channels', type=int, default=64)
+    parser.add_argument('--n-channels', type=int, default=64)
     # nr of input channels: 1: no bands, >1 bands B01, B02, etc included
     #parser.add_argument('--input_channels', type=int, default=3)  # number of input channels, default for RGB image: 3
     # kernel size of the first and last convolutions which transform the inputs and outputs
     parser.add_argument('--large_kernel_size', type=int, default=9)
     # kernel size of all convolutions in-between, i.e. those in the residual and subpixel convolutional blocks
     parser.add_argument('--small_kernel_size', type=int, default=3)
-    parser.add_argument('--n_blocks', type=int, default=16) # number of residual blocks
+    parser.add_argument('--n-blocks', type=int, default=16) # number of residual blocks
     # TODO: add activation function to argparse
     args = parser.parse_args()
 

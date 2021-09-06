@@ -269,13 +269,14 @@ class PredictPatchTask(EOTask):
     def execute(self, eopatch):
         print(' --- !! debug mode !! --- ')
         pred_eopatch = EOPatch(bbox=eopatch.bbox)
-        # TODO apply the model here
-        # TODO repeat the preprocessing from EODataset
-      
+        # apply the model here
+        # repeat the preprocessing from EODataset
+        band_names = ['B01','B02','B03','B04','B05','B06','B07','B08','B8A','B09','B11','B12']
         tidx = 0
         x = []
-        for b in range(self.args.input_channels-1):
-            xx = eopatch.data['BANDS'][tidx][:, :, b+1]
+        for band in self.args.bands:
+            band_ix = band_names.index(band)
+            xx = eopatch.data['BANDS'][tidx][:, :, band_ix]
             x.append(xx.astype(np.float32).squeeze())
         for index in self.args.indices:
             xx = eopatch.data[index][tidx]

@@ -124,7 +124,7 @@ class EODataset(Dataset):
             y = patch.mask_timeless['CULTIVATED']
             ytf = np.sum(y) / len(y.flatten())
             print(f'Target fraction: {100*ytf:.1f} %')
-            if ytf < 0.1:
+            if ytf < args.min_true_fraction:
                 continue
 
             lowres.append(np.array(x))
@@ -383,6 +383,8 @@ if __name__=='__main__':
     # kernel size of all convolutions in-between, i.e. those in the residual and subpixel convolutional blocks
     parser.add_argument('--small_kernel_size', type=int, default=3)
     parser.add_argument('--n_blocks', type=int, default=16) # number of residual blocks
+    # minimum fraction of true samples (avoid empty samples?)
+    parser.add_argument('--min-true-fraction', type=float, default=0, help='minimum fraction of positive pixels in target') 
     # TODO: add activation function to argparse
     args = parser.parse_args()
 

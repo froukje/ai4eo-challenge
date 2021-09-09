@@ -228,6 +228,7 @@ def main(args):
 
     # training
     best_loss = np.inf
+    best_mcc = -np.inf
     best_epoch = 0
     patience_count = 0
     # history
@@ -277,11 +278,13 @@ def main(args):
             nni.report_intermediate_result(mcc)
         # early stopping
         if valid_loss < best_loss:
+        #if mcc < best_mcc:
             best_model = copy.deepcopy(model)
             best_preds = preds
             cast_best_preds = (best_preds > 0.5).astype(np.float32)
             best_valid_loss = valid_loss
-            mcc = calc_evaluation_metric(targets, cast_best_preds, weights)
+            best_mcc = mcc
+            #mcc = calc_evaluation_metric(targets, cast_best_preds, weights)
             patience_count = 0
         else:
             patience_count += 1
@@ -289,10 +292,10 @@ def main(args):
         if patience_count == args.patience:
             print(f'no improvement for {args.patience} epochs, early stopping')
             break
-    mcc_final = calc_evaluation_metric(targets.flatten(), cast_best_preds.flatten(), weights.flatten())
+    #mcc_final = calc_evaluation_metric(targets, cast_best_preds, weights)
     if args.nni:
         #nni.report_final_result(best_valid_loss)
-        nni.report_final_result(mcc_final)
+        nni.report_final_result(best_mcc)
     # save best model and TODO predictions to disk
     save_model_path = os.path.join(args.target_dir, 'best_model.pt')
     torch.save(best_model.state_dict(), save_model_path)

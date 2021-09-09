@@ -136,6 +136,7 @@ class SRResNet(nn.Module):
         :param scaling_factor: factor to scale input images by (along both dimensions) in the subpixel convolutional block
         """
         self.args = args
+        input_channels = len(args.bands) + 1
         super(SRResNet, self).__init__()
 
         # Scaling factor must be 2, 4 or 8
@@ -143,7 +144,7 @@ class SRResNet(nn.Module):
         assert scaling_factor in {2, 4, 8}, "The scaling factor must be 2, 4, or 8!"
 
         # First convolutional block
-        self.conv_block1 = ConvolutionalBlock(in_channels=args.input_channels, out_channels=args.n_channels, 
+        self.conv_block1 = ConvolutionalBlock(in_channels=input_channels, out_channels=args.n_channels, 
                 kernel_size=args.large_kernel_size,
                 batch_norm=False, activation='PReLu')
 

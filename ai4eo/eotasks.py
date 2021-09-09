@@ -278,8 +278,7 @@ class PredictPatchTask(EOTask):
     def execute(self, eopatch):
         #pred_eopatch = EOPatch(bbox=eopatch.bbox)
         # TODO repeat the preprocessing from EODataset
-      
-        # subsample time frame TODO
+        band_names = ['B01','B02','B03','B04','B05','B06','B07','B08','B8A','B09','B11','B12']
         tidx = list(range(self.args.n_time_frames//2)) + list(range(-1*(self.args.n_time_frames//2), 0))
         print(f'selecting the first N//2 and the last N//2 time stamps: {tidx}')
 
@@ -288,11 +287,10 @@ class PredictPatchTask(EOTask):
         x = []
         for ix in tidx: # outer most group: time index
             print(f'Time index {ix}')
-            for b in range(self.args.input_channels-1):
-                print(f'Band index {b} -- skip')
-                continue
-                xx = eopatch.data['BANDS'][ix][:, :, b+1]
-                x.append(xx.astype(np.float32).squeeze())
+            for band in args.bands:
+                band_ix = band_names.index(band)
+                xx = patch.data['BANDS'][ix][:, :, band_ix]
+                x.append(xx.astype(np.float32))
             for index in self.args.indices:
                 xx = eopatch.data[index][ix]
                 x.append(xx.astype(np.float32).squeeze())

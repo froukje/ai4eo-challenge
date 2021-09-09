@@ -8,3 +8,5 @@ ai4eo/best_model.pt
 nni/*
 jobs/*
 ai4eo/*_losses.txt
+ai4eo_latest.sif
+ai4eo/submission/*

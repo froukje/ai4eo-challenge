@@ -76,6 +76,10 @@ def main(args):
     valid_data_predicate = eotasks.ValidDataFractionPredicate(args.cloud_threshold)
     filter_task = SimpleFilterTask((FeatureType.MASK, 'IS_VALID'), valid_data_predicate)
 
+    # Filter out nans
+    nan_data_predicate = eotasks.NanDataPredicate()
+    nan_filter_task = SimpleFilterTask((FeatureType.DATA, 'NDVI'), nan_data_predicate)
+
     # subsample
     # move to data set loading - does not work with the workflow, produces a list
     #   sample_task = eotasks.SamplePatchletsTask(s2_patchlet_size=args.s2_length, 
@@ -98,6 +102,7 @@ def main(args):
                               add_sh_validmask,
                               add_valid_count,
                               filter_task,
+                              nan_filter_task,
                               #sample_task, 
                               add_weight,
                               save_eopatches,

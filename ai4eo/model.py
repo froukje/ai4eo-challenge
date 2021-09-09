@@ -56,8 +56,11 @@ class EODataset(Dataset):
 
         if flag=='train':
             f_patches = f_patches[args.n_valid_patches:]
-        else:
+        elif flag=='valid':
             f_patches = f_patches[:args.n_valid_patches]
+            print('EOPatches used for validation:', f_patches)
+        else:
+            raise ValueError("not implemented: ", flag)
 
         # load patches
         eo_load = LoadTask(path=args.processed_data_dir)
@@ -80,15 +83,19 @@ class EODataset(Dataset):
 
         start_time = time.time()
 
+        min_patches = 100
+
         for patch in large_patches:
+            min_patches = min(len(patch.data['BANDS']), min_patches)
             sp = eo_sample.execute(patch)
             small_patches.extend(sp)
 
         print(f'creating {len(small_patches)} small patches from {len(large_patches)} patches in {time.time()-start_time:.1f} seconds')
+        print(f'minimum time frames: {min_patches}')
 
         # subsample time frame TODO
-        tidx = 0
-        print(f'selecting the very first time stamp')
+        tidx = list(range(args.n_time_frames//2)) + list(range(-1*(args.n_time_frames//2), 0))
+        print(f'selecting the first N//2 and the last N//2 time stamps: {tidx}')
 
         # subsample bands and other channels
         print('-- selecting bands --')
@@ -106,16 +113,22 @@ class EODataset(Dataset):
         
         for patch in small_patches:
             x = []
-            for band in args.bands:
-                band_ix = band_names.index(band)
-                xx = patch.data['BANDS'][tidx][:, :, band_ix]
-                x.append(xx.astype(np.float32))
-            for index in args.indices:
-                xx = patch.data[index][tidx]
-                x.append(xx.astype(np.float32).squeeze())
+            for ix in tidx: # outer most group: time index
+                for band in args.bands:
+                    band_ix = band_names.index(band)
+                    xx = patch.data['BANDS'][ix][:, :, band_ix]
+                    x.append(xx.astype(np.float32))
+                for index in args.indices:
+                    xx = patch.data[index][ix]
+                    x.append(xx.astype(np.float32).squeeze())
+
+            y = patch.mask_timeless['CULTIVATED']
+            ytf = np.sum(y) / len(y.flatten())
+            print(f'Target fraction: {100*ytf:.1f} %')
+            if ytf < args.min_true_fraction:
+                continue
 
             lowres.append(np.array(x))
-            y = patch.mask_timeless['CULTIVATED']
             y = y.swapaxes(0,2)
             y = y.swapaxes(1,2)
             target.append(y.astype(np.float32))
@@ -123,6 +136,7 @@ class EODataset(Dataset):
             w = w.swapaxes(0,2)
             w = w.swapaxes(1,2)
             weight.append(w.astype(np.float32))
+
 
         # BANDS: time_idx * S * S * band_idx
 
@@ -204,8 +218,6 @@ def main(args):
         np.random.seed(2021)
         torch.manual_seed(1407)
 
-    assert args.n_time_frames==1, print(f'Not implemented: n_time_frame={args.n_time_frames}')
-
     if args.inference:
         print('not implemented: inference')
         return
@@ -217,7 +229,9 @@ def main(args):
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
     valid_loader = DataLoader(valid_dataset, batch_size=args.batch_size)
     # instantiate the model
-    #model = EOModel(args, len(args.bands)+len(args.indices))
+    print('!!! until the band argument issue is resolved, manually account for time frames !!!')
+    print('!!! args.input_channels = args.n_time_frames * args.input_channels * len(args.indices) !!!')
+    args.input_channels = args.n_time_frames*args.input_channels*len(args.indices)
     model = SRResNet(args)
     if torch.cuda.is_available():
         model = model.cuda()
@@ -270,8 +284,8 @@ def main(args):
         #print(preds.shape)
         #print(targets.shape)
         print(f'Validation took {(time.time() - start_time) / 60:.2f} minutes, valid_loss: {valid_loss:.4f}')
-        cast_preds = (preds > 0.5).astype(np.float32) # sigmoid --> binary
-        mcc = calc_evaluation_metric(targets, cast_preds, weights)
+        #cast_preds = (preds > 0.5).astype(np.float32) # sigmoid --> binary
+        #mcc = calc_evaluation_metric(targets, cast_preds, weights)
         # nni
         if args.nni:
             #nni.report_intermediate_result(valid_loss)
@@ -320,6 +334,7 @@ def calc_evaluation_metric(target, pred, weight):
     MCC = np.mean(MCC, axis=0)
     #MCC = matthews_corrcoef(target.flatten(), pred.flatten(), sample_weight=weight.flatten())
     print(f'evaluation metric MCC: {MCC:.4f}')
+    print(f'{time.time() - start_time:.2f} seconds')
     return MCC
 
 
@@ -370,6 +385,8 @@ if __name__=='__main__':
     parser.add_argument('--large_kernel_size', type=int, default=9)
     # kernel size of all convolutions in-between, i.e. those in the residual and subpixel convolutional blocks
     parser.add_argument('--small_kernel_size', type=int, default=3)
+    # minimum fraction of true samples (avoid empty samples?)
+    parser.add_argument('--min-true-fraction', type=float, default=0, help='minimum fraction of positive pixels in target') 
     parser.add_argument('--n-blocks', type=int, default=16) # number of residual blocks
     # TODO: add activation function to argparse
     args = parser.parse_args()

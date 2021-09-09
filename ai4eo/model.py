@@ -94,15 +94,13 @@ class EODataset(Dataset):
         print(f'minimum time frames: {min_patches}')
 
         # subsample time frame TODO
-        tidx = list(range(args.n_time_frames//2)) + list(range(-1*(args.n_time_frames//2), 0))
+        tidx = list(range((args.n_time_frames+1)//2)) + list(range(-1*(args.n_time_frames//2), 0))
         print(f'selecting the first N//2 and the last N//2 time stamps: {tidx}')
 
         # subsample bands and other channels
         print('-- selecting bands --')
         for band in args.bands:
             print(f'  {band}')
-        #if args.input_channels > 1:
-        #    print(f' {band_names[:args.input_channels-1]}')
         print('-- selecting normalized indices --')
         for index in args.indices:
             print(f'  {index}')
@@ -231,7 +229,7 @@ def main(args):
     # instantiate the model
     print('!!! until the band argument issue is resolved, manually account for time frames !!!')
     print('!!! args.input_channels = args.n_time_frames * args.input_channels * len(args.indices) !!!')
-    args.input_channels = args.n_time_frames*args.input_channels*len(args.indices)
+    args.input_channels = args.n_time_frames*(len(args.bands)+1)*len(args.indices)
     model = SRResNet(args)
     if torch.cuda.is_available():
         model = model.cuda()
@@ -284,21 +282,17 @@ def main(args):
         #print(preds.shape)
         #print(targets.shape)
         print(f'Validation took {(time.time() - start_time) / 60:.2f} minutes, valid_loss: {valid_loss:.4f}')
-        #cast_preds = (preds > 0.5).astype(np.float32) # sigmoid --> binary
-        #mcc = calc_evaluation_metric(targets, cast_preds, weights)
         # nni
         if args.nni:
             #nni.report_intermediate_result(valid_loss)
             nni.report_intermediate_result(mcc)
         # early stopping
         if valid_loss < best_loss:
-        #if mcc < best_mcc:
             best_model = copy.deepcopy(model)
             best_preds = preds
             cast_best_preds = (best_preds > 0.5).astype(np.float32)
             best_valid_loss = valid_loss
-            best_mcc = mcc
-            #mcc = calc_evaluation_metric(targets, cast_best_preds, weights)
+            best_mcc = calc_evaluation_metric(targets, cast_best_preds, weights)
             patience_count = 0
         else:
             patience_count += 1
@@ -306,7 +300,6 @@ def main(args):
         if patience_count == args.patience:
             print(f'no improvement for {args.patience} epochs, early stopping')
             break
-    #mcc_final = calc_evaluation_metric(targets, cast_best_preds, weights)
     if args.nni:
         #nni.report_final_result(best_valid_loss)
         nni.report_final_result(best_mcc)
@@ -332,9 +325,7 @@ def calc_evaluation_metric(target, pred, weight):
         mcc.append(matthews_corrcoef(target[i,...].flatten(), pred[i,...].flatten(), sample_weight=weight[i,...].flatten()))
     MCC = np.stack(mcc)
     MCC = np.mean(MCC, axis=0)
-    #MCC = matthews_corrcoef(target.flatten(), pred.flatten(), sample_weight=weight.flatten())
     print(f'evaluation metric MCC: {MCC:.4f}')
-    print(f'{time.time() - start_time:.2f} seconds')
     return MCC
 
 

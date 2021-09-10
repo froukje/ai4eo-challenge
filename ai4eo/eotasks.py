@@ -279,7 +279,7 @@ class PredictPatchTask(EOTask):
         pred_eopatch = EOPatch(bbox=eopatch.bbox)
         # TODO repeat the preprocessing from EODataset
         band_names = ['B01','B02','B03','B04','B05','B06','B07','B08','B8A','B09','B11','B12']
-        tidx = list(range(self.args.n_time_frames+1//2)) + list(range(-1*(self.args.n_time_frames//2), 0))
+        tidx = list(range((self.args.n_time_frames+1)//2)) + list(range(-1*(self.args.n_time_frames//2), 0))
         print(f'selecting the first N//2 and the last N//2 time stamps: {tidx}')
 
         print(self.args.indices)

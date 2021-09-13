@@ -119,7 +119,7 @@ class EODataset(Dataset):
                     if len(patch.data['BANDS']) > ix:
                         xx = patch.data['BANDS'][ix][:, :, band_ix]
                     else:
-                        print('No data for this time frame - fill with first time step')
+                        #print('No data for this time frame - fill with first time step')
                         xx = patch.data['BANDS'][0][:, :, band_ix]
                     x.append(xx.astype(np.float32))
                 for index in args.indices:
@@ -137,14 +137,31 @@ class EODataset(Dataset):
                 continue
 
             lowres.append(np.array(x))
+            ###
+            x90 = [np.rot90(x[i]) for i in range(len(x))]
+            x90 = np.stack(x90)
+            lowres.append(np.array(x90))
+            ###
+
+            y90 = np.rot90(y)
             y = y.swapaxes(0,2)
             y = y.swapaxes(1,2)
+            y90 = y90.swapaxes(0,2)
+            y90 = y90.swapaxes(1,2)
             target.append(y.astype(np.float32))
+            ###
+            target.append(y90.astype(np.float32))
+            ###
             w = patch.data_timeless['WEIGHTS']
+            w90 = np.rot90(w)
             w = w.swapaxes(0,2)
             w = w.swapaxes(1,2)
+            w90 = w90.swapaxes(0,2)
+            w90 = w90.swapaxes(1,2)
             weight.append(w.astype(np.float32))
-
+            ###
+            weight.append(w90.astype(np.float32))
+            ###
 
         # BANDS: time_idx * S * S * band_idx
 
@@ -385,7 +402,6 @@ if __name__=='__main__':
     # minimum fraction of true samples (avoid empty samples?)
     parser.add_argument('--min-true-fraction', type=float, default=0, help='minimum fraction of positive pixels in target') 
     parser.add_argument('--n-blocks', type=int, default=16) # number of residual blocks
-    # TODO: add activation function to argparse
     args = parser.parse_args()
 
     if args.nni:

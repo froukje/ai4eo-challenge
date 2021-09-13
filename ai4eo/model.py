@@ -94,7 +94,8 @@ class EODataset(Dataset):
         print(f'minimum time frames: {min_patches}')
 
         # subsample time frame TODO
-        tidx = list(range((args.n_time_frames+1)//2)) + list(range(-1*(args.n_time_frames//2), 0))
+        #tidx = list(range((args.n_time_frames+1)//2)) + list(range(-1*(args.n_time_frames//2), 0))
+        tidx = list(range(args.n_time_frames))
         print(f'selecting the first N//2 and the last N//2 time stamps: {tidx}')
 
         # subsample bands and other channels
@@ -108,21 +109,30 @@ class EODataset(Dataset):
         lowres = []
         target = []
         weight = []
-        
+               
         for patch in small_patches:
+            #print(f"time indices: {len(patch.data['BANDS'])}")
             x = []
             for ix in tidx: # outer most group: time index
                 for band in args.bands:
                     band_ix = band_names.index(band)
-                    xx = patch.data['BANDS'][ix][:, :, band_ix]
+                    if len(patch.data['BANDS']) > ix:
+                        xx = patch.data['BANDS'][ix][:, :, band_ix]
+                    else:
+                        print('No data for this time frame - fill with first time step')
+                        xx = patch.data['BANDS'][0][:, :, band_ix]
                     x.append(xx.astype(np.float32))
                 for index in args.indices:
-                    xx = patch.data[index][ix]
+                    if len(patch.data['BANDS']) > ix:
+                        xx = patch.data[index][ix]
+                    else:
+                        print('No data for this time frame - fill with first time step')
+                        xx = patch.data[index][0]
                     x.append(xx.astype(np.float32).squeeze())
 
             y = patch.mask_timeless['CULTIVATED']
             ytf = np.sum(y) / len(y.flatten())
-            print(f'Target fraction: {100*ytf:.1f} %')
+            #print(f'Target fraction: {100*ytf:.1f} %')
             if ytf < args.min_true_fraction:
                 continue
 
@@ -227,8 +237,6 @@ def main(args):
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
     valid_loader = DataLoader(valid_dataset, batch_size=args.batch_size)
     # instantiate the model
-    print('!!! until the band argument issue is resolved, manually account for time frames !!!')
-    print('!!! args.input_channels = args.n_time_frames * args.input_channels * len(args.indices) !!!')
     args.input_channels = args.n_time_frames*(len(args.bands)+1)*len(args.indices)
     model = SRResNet(args)
     if torch.cuda.is_available():
@@ -279,13 +287,10 @@ def main(args):
         preds = np.concatenate(preds, axis=0)
         targets = np.concatenate(targets, axis=0)
         weights = np.concatenate(weights, axis=0)
-        #print(preds.shape)
-        #print(targets.shape)
         mcc = calc_evaluation_metric(targets, preds.round().astype(np.float32), weights)
         print(f'Validation took {(time.time() - start_time) / 60:.2f} minutes, valid_loss: {valid_loss:.4f}')
         # nni
         if args.nni:
-            #nni.report_intermediate_result(valid_loss)
             nni.report_intermediate_result(mcc)
         # early stopping
         if valid_loss < best_loss:
@@ -307,7 +312,6 @@ def main(args):
             save_model_path = os.path.join(args.target_dir, f'epoch_{epoch}_model.pt')
             torch.save(model.state_dict(), save_model_path)
     if args.nni:
-        #nni.report_final_result(best_valid_loss)
         nni.report_final_result(best_mcc)
     # save best model and TODO predictions to disk
     save_model_path = os.path.join(args.target_dir, 'best_model.pt')
@@ -391,9 +395,6 @@ if __name__=='__main__':
 
     if args.nni:
         args = add_nni_params(args)
-
-    valid_bands=[[],["B02","B03","B04","B08"], ["B02","B03","B04","B05","B06","B07","B08","B8A","B11","B12"]]
-    assert(args.bands in valid_bands), "chosen bands are not valid!"  
 
     print('\n*** begin args key / value ***')
     for key, value in vars(args).items():

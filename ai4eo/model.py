@@ -94,8 +94,8 @@ class EODataset(Dataset):
         print(f'minimum time frames: {min_patches}')
 
         # subsample time frame TODO
-        #tidx = list(range((args.n_time_frames+1)//2)) + list(range(-1*(args.n_time_frames//2), 0))
-        tidx = list(range(args.n_time_frames))
+        tidx = list(range((args.n_time_frames+1)//2)) + list(range(-1*(args.n_time_frames//2), 0))
+        #tidx = list(range(args.n_time_frames))
         print(f'selecting the first N//2 and the last N//2 time stamps: {tidx}')
 
         # subsample bands and other channels
@@ -237,7 +237,7 @@ def main(args):
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
     valid_loader = DataLoader(valid_dataset, batch_size=args.batch_size)
     # instantiate the model
-    args.input_channels = args.n_time_frames*(len(args.bands)+1)*len(args.indices)
+    args.input_channels = args.n_time_frames*(len(args.bands)+len(args.indices))
     model = SRResNet(args)
     if torch.cuda.is_available():
         model = model.cuda()
@@ -287,7 +287,7 @@ def main(args):
         preds = np.concatenate(preds, axis=0)
         targets = np.concatenate(targets, axis=0)
         weights = np.concatenate(weights, axis=0)
-        mcc = calc_evaluation_metric(targets, preds.round().astype(np.float32), weights)
+        #mcc = calc_evaluation_metric(targets, preds.round().astype(np.float32), weights)
         print(f'Validation took {(time.time() - start_time) / 60:.2f} minutes, valid_loss: {valid_loss:.4f}')
         # nni
         if args.nni:
@@ -298,8 +298,8 @@ def main(args):
             best_preds = preds
             cast_best_preds = (best_preds > 0.5).astype(np.float32)
             best_valid_loss = valid_loss
-            best_mcc = mcc
-            #best_mcc = calc_evaluation_metric(targets, cast_best_preds, weights)
+            #best_mcc = mcc
+            best_mcc = calc_evaluation_metric(targets, cast_best_preds, weights)
             patience_count = 0
         else:
             patience_count += 1

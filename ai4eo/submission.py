@@ -94,9 +94,7 @@ def main(args):
 
     # Predict
     model_state = torch.load(args.trained_model)
-    print('!!! until the band argument issue is resolved, manually account for time frames !!!')
-    print('!!! args.input_channels = args.n_time_frames * args.input_channels * len(args.indices) !!!')
-    args.input_channels = args.n_time_frames*(len(args.bands)+1)*len(args.indices)
+    args.input_channels = args.n_time_frames*(len(args.bands)+len(args.indices))
     eomodel = SRResNet(args)
     eomodel.load_state_dict(model_state)
     predict_task = eotasks.PredictPatchTask(eomodel, (FeatureType.DATA, 'BANDS'), args)

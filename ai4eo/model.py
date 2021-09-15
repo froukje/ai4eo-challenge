@@ -119,14 +119,12 @@ class EODataset(Dataset):
                     if len(patch.data['BANDS']) > ix:
                         xx = patch.data['BANDS'][ix][:, :, band_ix]
                     else:
-                        print('No data for this time frame - fill with first time step')
                         xx = patch.data['BANDS'][0][:, :, band_ix]
                     x.append(xx.astype(np.float32))
                 for index in args.indices:
                     if len(patch.data['BANDS']) > ix:
                         xx = patch.data[index][ix]
                     else:
-                        print('No data for this time frame - fill with first time step')
                         xx = patch.data[index][0]
                     x.append(xx.astype(np.float32).squeeze())
 
@@ -136,22 +134,36 @@ class EODataset(Dataset):
             if ytf < args.min_true_fraction:
                 continue
 
-            lowres.append(np.array(x))
-            y = y.swapaxes(0,2)
-            y = y.swapaxes(1,2)
-            target.append(y.astype(np.float32))
-            w = patch.data_timeless['WEIGHTS']
-            w = w.swapaxes(0,2)
-            w = w.swapaxes(1,2)
-            weight.append(w.astype(np.float32))
-
+            w = patch.data_timeless['WEIGHTS'] 
+           
+            # add rotated images
+            for k in range(4):
+                x_work = x.copy()
+                if k>=1:
+                    x = [np.rot90(x_work[i], k=k) for i in range(len(x))]
+                    x = np.stack(x)
+                lowres.append(np.array(x))
+                if k>=1:
+                    y = y.swapaxes(1,2)
+                    y = y.swapaxes(0,2)
+                    y = np.rot90(y, k=k)
+                y = y.swapaxes(0,2)
+                y = y.swapaxes(1,2)
+                target.append(y.astype(np.float32))
+                if k>=1:
+                    w = w.swapaxes(1,2)
+                    w = w.swapaxes(0,2)
+                    w = np.rot90(w, k=k) 
+                w = w.swapaxes(0,2)
+                w = w.swapaxes(1,2)
+                weight.append(w.astype(np.float32))
+            
 
         # BANDS: time_idx * S * S * band_idx
 
-        self.lowres = np.array(lowres) # all input features
-        self.target = np.array(target) # the target map
-        self.weight = np.array(weight) # the pixel weights
-
+        self.lowres = np.stack(lowres) # all input features
+        self.target = np.concatenate(target) # all input features
+        self.weight = np.concatenate(weight) # all input features
         print(f'{flag} dataset shapes: lowres = {self.lowres.shape}, target = {self.target.shape}')
 
     def __len__(self):
@@ -159,33 +171,6 @@ class EODataset(Dataset):
 
     def __getitem__(self, idx):
         return self.lowres[idx], self.target[idx], self.weight[idx]
-
-# Model definition
-class EOModel(nn.Module):
-    def __init__(self, args, input_channels):
-        # stub: add proper architecture
-        super().__init__()
-        self.args = args
-        self.input_channels = input_channels
-        self.down_cv1 = nn.Conv2d(input_channels, args.filters, kernel_size=3, padding=1)
-        self.up_cv1   = nn.ConvTranspose2d(args.filters, 1, kernel_size=3, padding=1)
-        self.up_cv2   = nn.ConvTranspose2d(1, 1, kernel_size=3, stride=4, padding=0)
-
-    def forward(self, x):
-        x = x.reshape((-1, self.input_channels, self.args.s2_length, self.args.s2_length))
-        x = F.relu(self.down_cv1(x))
-        x = F.relu(self.up_cv1(x))
-        output_size = (self.args.batch_size, 1, SCALE*self.args.s2_length, SCALE*self.args.s2_length)
-        x = self.up_cv2(x, output_size=output_size)
-        return x
-
-    # Other useful functions
-    def get_device(self):
-        '''Return gpu if available, else cpu'''
-        if torch.cuda.is_available():
-            return 'cuda:0'
-        else:
-            return 'cpu'
 
 
 # Main function
@@ -390,7 +375,6 @@ if __name__=='__main__':
     # minimum fraction of true samples (avoid empty samples?)
     parser.add_argument('--min-true-fraction', type=float, default=0, help='minimum fraction of positive pixels in target') 
     parser.add_argument('--n-blocks', type=int, default=16) # number of residual blocks
-    # TODO: add activation function to argparse
     args = parser.parse_args()
 
     if args.nni:

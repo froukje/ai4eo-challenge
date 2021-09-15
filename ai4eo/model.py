@@ -272,7 +272,8 @@ def main(args):
         preds = np.concatenate(preds, axis=0)
         targets = np.concatenate(targets, axis=0)
         weights = np.concatenate(weights, axis=0)
-        #mcc = calc_evaluation_metric(targets, preds.round().astype(np.float32), weights)
+        if args.nni:
+            mcc = calc_evaluation_metric(targets, preds.round().astype(np.float32), weights)
         print(f'Validation took {(time.time() - start_time) / 60:.2f} minutes, valid_loss: {valid_loss:.4f}')
         # nni
         if args.nni:
@@ -283,8 +284,10 @@ def main(args):
             best_preds = preds
             cast_best_preds = (best_preds > 0.5).astype(np.float32)
             best_valid_loss = valid_loss
-            #best_mcc = mcc
-            best_mcc = calc_evaluation_metric(targets, cast_best_preds, weights)
+            if args.nni:
+                best_mcc = mcc
+            else:
+                best_mcc = calc_evaluation_metric(targets, cast_best_preds, weights)
             patience_count = 0
         else:
             patience_count += 1

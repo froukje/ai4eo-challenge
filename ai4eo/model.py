@@ -222,7 +222,7 @@ def main(args):
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
     valid_loader = DataLoader(valid_dataset, batch_size=args.batch_size)
     # instantiate the model
-    args.input_channels = args.n_time_frames*(len(args.bands)+1)*len(args.indices)
+    args.input_channels = args.n_time_frames*(len(args.bands)+len(args.indices))
     model = SRResNet(args)
     if torch.cuda.is_available():
         model = model.cuda()
@@ -272,7 +272,7 @@ def main(args):
         preds = np.concatenate(preds, axis=0)
         targets = np.concatenate(targets, axis=0)
         weights = np.concatenate(weights, axis=0)
-        mcc = calc_evaluation_metric(targets, preds.round().astype(np.float32), weights)
+        #mcc = calc_evaluation_metric(targets, preds.round().astype(np.float32), weights)
         print(f'Validation took {(time.time() - start_time) / 60:.2f} minutes, valid_loss: {valid_loss:.4f}')
         # nni
         if args.nni:
@@ -283,8 +283,8 @@ def main(args):
             best_preds = preds
             cast_best_preds = (best_preds > 0.5).astype(np.float32)
             best_valid_loss = valid_loss
-            best_mcc = mcc
-            #best_mcc = calc_evaluation_metric(targets, cast_best_preds, weights)
+            #best_mcc = mcc
+            best_mcc = calc_evaluation_metric(targets, cast_best_preds, weights)
             patience_count = 0
         else:
             patience_count += 1
@@ -292,6 +292,10 @@ def main(args):
         if patience_count == args.patience:
             print(f'no improvement for {args.patience} epochs, early stopping')
             break
+
+        if epoch % args.checkpoint_epoch == 0:
+            save_model_path = os.path.join(args.target_dir, f'epoch_{epoch}_model.pt')
+            torch.save(model.state_dict(), save_model_path)
     if args.nni:
         nni.report_final_result(best_mcc)
     # save best model and TODO predictions to disk
@@ -357,6 +361,7 @@ if __name__=='__main__':
     parser.add_argument('--filters', type=int, default=8)
     parser.add_argument('--max-epochs', type=int, default=100)
     parser.add_argument('--patience', type=int, default=6, help='early stopping patience, -1 for no early stopping')
+    parser.add_argument('--checkpoint-epoch', type=int, default=1000, help='checkpoint every nth epoch')
     # the scaling factor (for the Generator), the input LR images will be downsampled from the target HR images by this factor 
     parser.add_argument('--scaling_factor', type=int, default=4)
     # number of channels in-between, i.e. the input and output channels for the residual and subpixel convolutional blocks

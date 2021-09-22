@@ -219,8 +219,8 @@ def main(args):
     train_dataset = EODataset('train', args)
     valid_dataset = EODataset('valid', args)
     # construct the dataloader
-    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
-    valid_loader = DataLoader(valid_dataset, batch_size=args.batch_size)
+    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, num_workers=8, shuffle=True, drop_last=True)
+    valid_loader = DataLoader(valid_dataset, batch_size=args.batch_size, num_workers=8)
     # instantiate the model
     args.input_channels = args.n_time_frames*(len(args.bands)+len(args.indices))
     model = SRResNet(args)

@@ -176,7 +176,7 @@ class EODataset(Dataset):
 # Main function
 def main(args):
 
-    def predict(inputs, target, weight, model, eval_=True):
+    def predict(inputs, target, weight, model, alpha=1, eval_=True):
         """Runs the prediction for a given model on data. Returns the loss together with the predicted
         values as numpy arrays."""
 
@@ -202,7 +202,13 @@ def main(args):
         target = target.reshape((-1, S*S))
         pred   = pred.reshape((-1, S*S))
         weight = weight.reshape((-1, S*S))
-        loss = F.binary_cross_entropy(pred, target, weight=weight)
+        loss1 = F.binary_cross_entropy(pred, target, weight=weight)
+
+        # count pixels
+        loss2 = (torch.sum(pred) - torch.sum(target)) / S / S
+
+        print(loss1, loss2)
+        loss = alpha * loss1 + (1 - alpha) * loss2
 
         return loss, pred_values
 
@@ -247,7 +253,7 @@ def main(args):
         print(f'\nEpoch: {epoch}')
         train_losses = []
         for idx, (inputs, target, weight) in enumerate(train_loader):
-            loss, _ = predict(inputs, target, weight, model, eval_=False)
+            loss, _ = predict(inputs, target, weight, model, args.alpha, eval_=False)
             train_losses.append(loss.item())
             optimizer.zero_grad()
             loss.backward()
@@ -262,7 +268,7 @@ def main(args):
         model = model.eval()
         valid_losses, preds ,targets, weights = [], [], [], []
         for idx, (inputs, target, weight) in enumerate(valid_loader):
-            loss, pred = predict(inputs, target, weight, model, eval_=True)
+            loss, pred = predict(inputs, target, weight, model, args.alpha, eval_=True)
             valid_losses.append(loss.detach().cpu().numpy())
             preds.append(pred)
             targets.append(target)
@@ -378,6 +384,7 @@ if __name__=='__main__':
     # minimum fraction of true samples (avoid empty samples?)
     parser.add_argument('--min-true-fraction', type=float, default=0, help='minimum fraction of positive pixels in target') 
     parser.add_argument('--n-blocks', type=int, default=16) # number of residual blocks
+    parser.add_argument('--alpha', type=float, default=1, help='lagrange multiplier for the second loss pushing for pixel count conservation')
     args = parser.parse_args()
 
     if args.nni:

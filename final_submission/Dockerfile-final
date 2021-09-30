@@ -42,11 +42,10 @@ ADD jupyter-user/edc.py .
 RUN mv edc.py /opt/conda/envs/"${ENV_NAME}"/lib/python*/site-packages
 USER $NB_UID
 
-# TODO
 # Add the final notebook
 # Add the best model
 # Make the container automatically exectute the best notebook
 # Commands:
-# RUN ...
-# COPY ...
-# WORKDIR ...
+COPY best_model.pt .
+COPY final_submission.ipynb .
+COPY ai4eo.png .

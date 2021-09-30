@@ -49,3 +49,9 @@ USER $NB_UID
 COPY best_model.pt .
 COPY final_submission.ipynb .
 COPY ai4eo.png .
+COPY ../ai4eo/preprocessing.py ./ai4eo/preprocessing.py
+COPY ../ai4eo/srresnet_ai4eo.py ./ai4eo/srresnet_ai4eo.py
+COPY ../ai4eo/submission.py ./ai4eo/submission.py
+COPY ../ai4eo/utils.py ./ai4eo/utils.py
+COPY ../ai4eo/eotasks.py ./ai4eo/eotasks.py
+COPY ../ai4eo/create_submission.sh ./ai4eo/create_submission.sh
